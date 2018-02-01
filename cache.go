@@ -15,7 +15,7 @@ import (
 )
 
 type cache struct {
-	reqs               chan<- request
+	reqs               chan<- serviceRequest
 	addr               string
 	ttl                time.Duration
 	maxRequests        int
@@ -27,7 +27,7 @@ type cache struct {
 
 func (c *cache) close() { close(c.reqs) }
 
-func (c *cache) serve(reqs <-chan request) {
+func (c *cache) serve(reqs <-chan serviceRequest) {
 	prefetches := make(map[key]*serviceCache)
 	caches := make(map[key]*serviceCache)
 
@@ -105,7 +105,7 @@ dispatchRequests:
 }
 
 func (c *cache) spawn(key key, ready chan<- *serviceCache, done chan<- *serviceCache, next chan<- key) *serviceCache {
-	reqs := make(chan request, c.maxRequests)
+	reqs := make(chan serviceRequest, c.maxRequests)
 
 	sc := &serviceCache{
 		reqs:               reqs,
@@ -132,7 +132,7 @@ func (c *cache) spawn(key key, ready chan<- *serviceCache, done chan<- *serviceC
 }
 
 type serviceCache struct {
-	reqs               chan<- request
+	reqs               chan<- serviceRequest
 	key                key
 	err                error
 	addr               string
@@ -146,7 +146,7 @@ type serviceCache struct {
 
 func (c *serviceCache) close() { close(c.reqs) }
 
-func (c *serviceCache) serve(reqs <-chan request, done chan<- *serviceCache, next chan<- key, services []service) {
+func (c *serviceCache) serve(reqs <-chan serviceRequest, done chan<- *serviceCache, next chan<- key, services []service) {
 	deadline := time.Now().Add(c.ttl)
 
 	timeout := time.NewTimer(c.ttl)
@@ -179,7 +179,7 @@ func (c *serviceCache) serve(reqs <-chan request, done chan<- *serviceCache, nex
 		return d
 	}
 
-	respond := func(req request) {
+	respond := func(req serviceRequest) {
 		if c.err != nil {
 			req.reject(c.err)
 		} else {
@@ -269,7 +269,7 @@ func (c *serviceCache) load() ([]service, error) {
 			services = append(services, service{
 				addr: ip,
 				port: endpoint.Service.Port,
-				node: endpoint.Node.Node,
+				node: dns.Fqdn(endpoint.Node.Node),
 			})
 		}
 	}
@@ -292,21 +292,23 @@ type service struct {
 	node string
 }
 
-type request struct {
+type serviceRequest struct {
 	key key
-	res chan<- response
+	res chan<- serviceResponse
 }
 
-func (req request) resolve(srv service, ttl time.Duration) { req.res <- response{srv: srv, ttl: ttl} }
-func (req request) reject(err error)                       { req.res <- response{err: err} }
+func (req serviceRequest) resolve(srv service, ttl time.Duration) {
+	req.res <- serviceResponse{srv: srv, ttl: ttl}
+}
+func (req serviceRequest) reject(err error) { req.res <- serviceResponse{err: err} }
 
-type response struct {
+type serviceResponse struct {
 	srv service
 	err error
 	ttl time.Duration
 }
 
-func (r response) header(name string, rrtype uint16) dns.RR_Header {
+func (r serviceResponse) header(name string, rrtype uint16) dns.RR_Header {
 	return dns.RR_Header{
 		Name:   name,
 		Rrtype: rrtype,
@@ -315,21 +317,21 @@ func (r response) header(name string, rrtype uint16) dns.RR_Header {
 	}
 }
 
-func (r response) A(name string) *dns.A {
+func (r serviceResponse) A(name string) *dns.A {
 	return &dns.A{
 		Hdr: r.header(name, dns.TypeA),
 		A:   r.srv.addr,
 	}
 }
 
-func (r response) AAAA(name string) *dns.AAAA {
+func (r serviceResponse) AAAA(name string) *dns.AAAA {
 	return &dns.AAAA{
 		Hdr:  r.header(name, dns.TypeAAAA),
 		AAAA: r.srv.addr,
 	}
 }
 
-func (r response) SRV(name string) *dns.SRV {
+func (r serviceResponse) SRV(name string) *dns.SRV {
 	return &dns.SRV{
 		Hdr:      r.header(name, dns.TypeSRV),
 		Priority: 1,
@@ -339,7 +341,7 @@ func (r response) SRV(name string) *dns.SRV {
 	}
 }
 
-func (r response) ANY(name string) dns.RR {
+func (r serviceResponse) ANY(name string) dns.RR {
 	if isIPv6(r.srv.addr) {
 		return r.AAAA(name)
 	}

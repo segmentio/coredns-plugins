@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/coredns/coredns/plugin"
+	"github.com/coredns/coredns/request"
 	"github.com/miekg/dns"
 )
 
@@ -70,61 +71,85 @@ func (*Consul) Name() string { return "consul" }
 
 // ServeDNS satisfies the plugin.Handler interface.
 func (c *Consul) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+	state := request.Request{W: w, Req: r}
+	rcode, answer, extra, err := c.serveDNS(ctx, state)
+
+	a := &dns.Msg{}
+	a.SetReply(r)
+	a.Rcode = rcode
+	a.Compress = true
+	a.Authoritative = true
+
+	if answer != nil {
+		a.Answer = append(a.Answer, answer)
+	}
+
+	if extra != nil {
+		a.Extra = append(a.Extra, extra)
+	}
+
+	state.SizeAndDo(a)
+	a, _ = state.Scrub(a)
+	w.WriteMsg(a)
+	return rcode, err
+}
+
+func (c *Consul) serveDNS(ctx context.Context, state request.Request) (rcode int, answer dns.RR, extra dns.RR, err error) {
 	c.once.Do(c.init)
 
-	qname := r.Question[0].Name
-	qtype := r.Question[0].Qtype
+	qname := state.Name()
+	qtype := state.QType()
 
 	name, tag, typ, dc, domain := splitName(qname)
 	if len(name) == 0 {
-		return dns.RcodeNameError, nil
+		rcode = dns.RcodeNameError
+		return
 	}
 	if domain != "consul" {
-		return dns.RcodeRefused, nil
+		rcode = dns.RcodeRefused
+		return
 	}
 	if typ != "service" {
-		return dns.RcodeNotImplemented, nil
+		rcode = dns.RcodeNotImplemented
+		return
 	}
 
-	key := key{
-		name:  name,
-		tag:   tag,
-		dc:    dc,
-		qtype: r.Question[0].Qtype,
-	}
-
+	key := key{name: name, tag: tag, dc: dc, qtype: qtype}
 	switch key.qtype {
 	case dns.TypeA, dns.TypeAAAA, dns.TypeANY:
 	case dns.TypeSRV:
 		key.qtype = dns.TypeANY
 	default:
-		return dns.RcodeNotImplemented, nil
+		rcode = dns.RcodeNotImplemented
+		return
 	}
 
-	res := make(chan response, 1)
-	req := request{key: key, res: res}
+	res := make(chan serviceResponse, 1)
+	req := serviceRequest{key: key, res: res}
 
 	select {
 	case c.cache.reqs <- req:
 	case <-ctx.Done():
-		return dns.RcodeServerFailure, ctx.Err()
+		rcode, err = dns.RcodeServerFailure, ctx.Err()
+		return
 	}
 
-	var found response
+	var found serviceResponse
 	select {
 	case found = <-res:
 	case <-ctx.Done():
-		return dns.RcodeServerFailure, ctx.Err()
+		rcode, err = dns.RcodeServerFailure, ctx.Err()
+		return
 	}
 	if found.err != nil {
-		return dns.RcodeServerFailure, found.err
+		rcode, err = dns.RcodeServerFailure, found.err
+		return
 	}
 	if found.srv.addr == nil {
-		return dns.RcodeNameError, nil
+		rcode = dns.RcodeNameError
+		return
 	}
 
-	var answer dns.RR
-	var extra dns.RR
 	switch qtype {
 	case dns.TypeA:
 		answer = found.A(qname)
@@ -133,24 +158,15 @@ func (c *Consul) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 	case dns.TypeANY:
 		answer = found.ANY(qname)
 	case dns.TypeSRV:
-		answer = found.SRV(qname)
-		extra = found.ANY(answer.(*dns.SRV).Target)
+		srv := found.SRV(qname)
+		answer = srv
+		extra = found.ANY(srv.Target)
 	}
-
-	r.Compress = true
-	r.Authoritative = true
-	r.Answer = append(r.Answer, answer)
-
-	if extra != nil {
-		r.Extra = append(r.Extra, extra)
-	}
-
-	w.WriteMsg(r)
-	return dns.RcodeSuccess, nil
+	return
 }
 
 func (c *Consul) init() {
-	reqs := make(chan request, c.MaxRequests)
+	reqs := make(chan serviceRequest, c.MaxRequests)
 
 	cache := &cache{
 		reqs:               reqs,
