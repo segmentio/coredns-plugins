@@ -147,12 +147,13 @@ type serviceCache struct {
 func (c *serviceCache) close() { close(c.reqs) }
 
 func (c *serviceCache) serve(reqs <-chan serviceRequest, done chan<- *serviceCache, next chan<- key, services []service) {
+	const timeBuckets = 4
 	deadline := time.Now().Add(c.ttl)
 
 	timeout := time.NewTimer(c.ttl)
 	defer timeout.Stop()
 
-	prefetchCheck := time.NewTimer(c.prefetchDuration)
+	prefetchCheck := time.NewTicker(c.prefetchDuration / timeBuckets)
 	defer prefetchCheck.Stop()
 
 	prefetchTrigger := time.NewTimer((c.ttl * time.Duration(100-c.prefetchPercentage)) / 100)
@@ -197,7 +198,10 @@ func (c *serviceCache) serve(reqs <-chan serviceRequest, done chan<- *serviceCac
 			return
 
 		case <-prefetchCheck.C:
-			prefetch = hits >= c.prefetchAmount
+			if !prefetch {
+				prefetch = hits >= c.prefetchAmount
+				hits -= (hits / timeBuckets) // assumes distribution over time
+			}
 
 		case <-prefetchTrigger.C:
 			if prefetch {
