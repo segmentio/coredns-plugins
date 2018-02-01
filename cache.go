@@ -162,7 +162,7 @@ func (c *serviceCache) serve(reqs <-chan serviceRequest, done chan<- *serviceCac
 	prefetchCheck := time.NewTicker(c.prefetchDuration / timeBuckets)
 	defer prefetchCheck.Stop()
 
-	prefetchTrigger := time.NewTimer((c.ttl * time.Duration(c.prefetchPercentage)) / 100)
+	prefetchTrigger := time.NewTimer(c.ttl - ((c.ttl * time.Duration(c.prefetchPercentage)) / 100))
 	defer prefetchTrigger.Stop()
 
 	hits := 0
