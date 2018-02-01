@@ -86,7 +86,7 @@ dispatchRequests:
 		sc.close()
 	}
 
-	for len(caches) != 0 && len(prefetches) != 0 {
+	for len(caches) != 0 || len(prefetches) != 0 {
 		select {
 		case <-next:
 			// ignore
