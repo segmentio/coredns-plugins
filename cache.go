@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math/rand"
 	"net"
 	"net/http"
@@ -41,6 +42,7 @@ dispatchRequests:
 		case sc := <-done:
 			if caches[sc.key] == sc {
 				delete(caches, sc.key)
+				log.Printf("[INFO] %s: expired!", sc.key)
 			}
 
 		case key := <-next:
@@ -119,10 +121,14 @@ func (c *cache) spawn(key key, ready chan<- *serviceCache, done chan<- *serviceC
 		rand:               rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 
+	log.Printf("[INFO] %s: fetching", key)
 	go func() {
 		services, err := sc.load()
 		if err != nil {
 			sc.err = err
+			log.Printf("[ERROR] %s: %v", key, err)
+		} else {
+			log.Printf("[INFO] %s: cached %d service endpoints", key, len(services))
 		}
 		go sc.serve(reqs, done, next, services)
 		ready <- sc
@@ -156,7 +162,7 @@ func (c *serviceCache) serve(reqs <-chan serviceRequest, done chan<- *serviceCac
 	prefetchCheck := time.NewTicker(c.prefetchDuration / timeBuckets)
 	defer prefetchCheck.Stop()
 
-	prefetchTrigger := time.NewTimer((c.ttl * time.Duration(100-c.prefetchPercentage)) / 100)
+	prefetchTrigger := time.NewTimer((c.ttl * time.Duration(c.prefetchPercentage)) / 100)
 	defer prefetchTrigger.Stop()
 
 	hits := 0
@@ -288,6 +294,28 @@ type key struct {
 	tag   string
 	dc    string
 	qtype uint16
+}
+
+func (k key) String() string {
+	b := make([]byte, 0, 100)
+	b = append(b, dns.TypeToString[k.qtype]...)
+	b = append(b, ' ')
+
+	if len(k.tag) != 0 {
+		b = append(b, k.tag...)
+		b = append(b, '.')
+	}
+
+	b = append(b, k.name...)
+	b = append(b, ".service"...)
+
+	if len(k.dc) != 0 {
+		b = append(b, '.')
+		b = append(b, k.dc...)
+	}
+
+	b = append(b, ".consul"...)
+	return string(b)
 }
 
 type service struct {

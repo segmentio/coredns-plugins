@@ -2,6 +2,7 @@ package coredns_consul
 
 import (
 	"context"
+	"log"
 	"net"
 	"net/http"
 	"runtime"
@@ -166,6 +167,9 @@ func (c *Consul) serveDNS(ctx context.Context, state request.Request) (rcode int
 }
 
 func (c *Consul) init() {
+	log.Printf("[INFO] consul %s { ttl %s; maxreq %d; prefetch %d %s %d%% }",
+		c.Addr, c.TTL, c.MaxRequests, c.PrefetchAmount, c.PrefetchDuration, c.PrefetchPercentage)
+
 	reqs := make(chan serviceRequest, c.MaxRequests)
 
 	cache := &cache{
