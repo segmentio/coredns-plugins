@@ -51,7 +51,7 @@ const (
 	defaultTTL                = 1 * time.Minute
 	defaultMaxRequests        = 8192
 	defaultPrefetchAmount     = 2
-	defaultPrefetchPercentage = 90
+	defaultPrefetchPercentage = 10
 	defaultPrefetchDuration   = 1 * time.Minute
 )
 
