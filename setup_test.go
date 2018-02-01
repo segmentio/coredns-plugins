@@ -27,8 +27,8 @@ func TestSetupSuccess(t *testing.T) {
 		},
 
 		{
-			input:              `consul localhost:1234`,
-			addr:               "http://localhost:1234",
+			input:              `consul 1.2.3.4:1234`,
+			addr:               "http://1.2.3.4:1234",
 			ttl:                defaultTTL,
 			prefetchAmount:     defaultPrefetchAmount,
 			prefetchPercentage: defaultPrefetchPercentage,
@@ -101,6 +101,7 @@ func TestSetupSuccess(t *testing.T) {
 
 			if err != nil {
 				t.Errorf("Expected to parse successfully but got and error: %v", err)
+				return
 			}
 
 			if consulPlugin.Addr != test.addr {

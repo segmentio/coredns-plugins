@@ -26,27 +26,23 @@ func init() {
 //	}
 //
 func setupConsul(c *caddy.Controller) error {
-	c.Next() // 'consul'
-
 	consulPlugin, err := parseConsul(c)
 	if err != nil {
 		return err
 	}
-
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
 		consulPlugin.Next = next
 		return consulPlugin
 	})
-
 	return nil
 }
 
 func parseConsul(c *caddy.Controller) (*Consul, error) {
-	consulPlugin := New()
-
-	if !c.NextArg() {
-		return nil, c.ArgErr()
+	if !c.Next() { // 'consul'
+		return nil, c.Err("expected 'consul' token at the beggining of the consul plugin configuration block")
 	}
+
+	consulPlugin := New()
 
 	switch args := c.RemainingArgs(); len(args) {
 	case 0:
