@@ -164,6 +164,9 @@ func TestSetupFailure(t *testing.T) {
 		`consul { # too many arguments to 'prefetch'
 			prefetch 10 1s 10% whatever
 		}`,
+		`consul { # invalid plugin configuration entry
+			whatever
+		}`,
 	}
 
 	for _, test := range tests {

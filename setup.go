@@ -76,6 +76,9 @@ func parseConsul(c *caddy.Controller) (*Consul, error) {
 				return nil, err
 			}
 			consulPlugin.TTL = ttl
+
+		default:
+			return nil, c.ArgErr()
 		}
 	}
 
