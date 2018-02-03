@@ -54,30 +54,25 @@ func init() {
 }
 
 func TestDogstatsd(t *testing.T) {
-	state := make(state)
-
 	server := dogstatsdServer()
 	defer server.Close()
 
-	d := New()
-	d.Addr = server.addr()
-	d.BufferSize = 100 // for the purpose of the test, forbidden otherwise
-	d.Reg = prometheus.NewRegistry()
-	d.Reg.MustRegister(
-		counter1,
-		counter2,
-		gauge1,
-		histogram1,
-	)
+	plugin := dogstastdPlugin(server.addr())
+	state := make(state)
 
-	// simple case
+	testDogstatsdSimple(t, plugin, server, state)
+	testDogstatsdRepeat(t, plugin, server, state)
+	testDogstatsdMerge(t, plugin, server, state)
+}
+
+func testDogstatsdSimple(t *testing.T, plugin *Dogstatsd, server server, state state) {
 	counter1.Add(42)
 	counter2.Add(1)
 	gauge1.Set(10)
 	histogram1.Observe(0)
 	histogram1.Observe(12)
 	histogram1.Observe(12)
-	d.pulse(state)
+	plugin.pulse(state)
 	assertRead(t, server,
 		"coredns.segment.counter1:42|c",
 		"coredns.segment.counter2:1|c",
@@ -86,12 +81,12 @@ func TestDogstatsd(t *testing.T) {
 		"coredns.segment.histogram1:12.5|h",
 		"coredns.segment.histogram1:17.5|h",
 	)
+}
 
-	// repeated changes between each pulse, first one is a no-op (so only 19
-	// changes are pushed).
+func testDogstatsdRepeat(t *testing.T, plugin *Dogstatsd, server server, state state) {
 	for i := 0; i != 20; i++ {
 		counter2.Add(float64(i))
-		d.pulse(state)
+		plugin.pulse(state)
 	}
 	assertRead(t, server,
 		"coredns.segment.counter2:1|c",
@@ -114,11 +109,13 @@ func TestDogstatsd(t *testing.T) {
 		"coredns.segment.counter2:18|c",
 		"coredns.segment.counter2:19|c",
 	)
+}
 
+func testDogstatsdMerge(t *testing.T, plugin *Dogstatsd, server server, state state) {
 	for i := 0; i != 10; i++ {
 		histogram1.Observe(float64(i))
 	}
-	d.pulse(state)
+	plugin.pulse(state)
 	assertRead(t, server,
 		"coredns.segment.histogram1:0.5|h",
 		"coredns.segment.histogram1:1.5|h",
@@ -131,6 +128,20 @@ func TestDogstatsd(t *testing.T) {
 		"coredns.segment.histogram1:8.5|h",
 		"coredns.segment.histogram1:9.5|h",
 	)
+}
+
+func dogstastdPlugin(addr string) *Dogstatsd {
+	plugin := New()
+	plugin.Addr = addr
+	plugin.BufferSize = 100 // for the purpose of the test, forbidden otherwise
+	plugin.Reg = prometheus.NewRegistry()
+	plugin.Reg.MustRegister(
+		counter1,
+		counter2,
+		gauge1,
+		histogram1,
+	)
+	return plugin
 }
 
 func dogstatsdServer() server {
