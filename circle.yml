@@ -1,0 +1,11 @@
+version: 2
+jobs:
+  test-consul:
+    steps:
+      - go test -v -race ./consul
+
+workflows:
+  version: 2
+  test:
+    jobs:
+      - test-consul
