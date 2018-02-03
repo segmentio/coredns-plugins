@@ -45,7 +45,7 @@ consul [ADDR:PORT] {
 
 * **ttl** configured how long responses from querying lists of services from
   consul are cached for. **DURATION** defaults to 1m.
-* `prefetch` will prefetch popular items when they are about to be expunged
+* **prefetch*** will prefetch popular items when they are about to be expunged
   from the cache.
   Popular means **AMOUNT** queries have been seen with no gaps of **DURATION**
   or more between them. **DURATION** defaults to 1m. Prefetching will happen
@@ -55,8 +55,8 @@ consul [ADDR:PORT] {
 
 ## Examples
 
-Enable the consul plugin for all zones, expire cached entries after 10s and
-prefetch those that have been queried more than twice over 10s.
+Enable the consul plugin, expire cached entries after 10s and prefetch those
+that have been queried more than twice over 10s.
 
 ~~~ corefile
 . {
