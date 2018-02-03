@@ -43,6 +43,13 @@ dispatchRequests:
 			if caches[sc.key] == sc {
 				delete(caches, sc.key)
 				log.Printf("[INFO] %s: expired!", sc.key)
+
+				if sc.negative() {
+					cacheSizeAddDenial(-1)
+				} else {
+					cacheSizeAddSuccess(-1)
+					cacheServicesAdd(-len(sc.services))
+				}
 			}
 
 		case key := <-next:
@@ -56,6 +63,13 @@ dispatchRequests:
 			} else {
 				delete(prefetches, sc.key)
 				caches[sc.key] = sc
+
+				if sc.negative() {
+					cacheSizeAddDenial(1)
+				} else {
+					cacheSizeAddSuccess(1)
+					cacheServicesAdd(len(sc.services))
+				}
 			}
 
 		case r, ok := <-reqs:
@@ -63,13 +77,22 @@ dispatchRequests:
 				break dispatchRequests
 			}
 
-			sc := caches[r.key]
-			if sc == nil {
-				sc = prefetches[r.key]
-				if sc == nil {
+			sc, hit := caches[r.key]
+			if !hit {
+				sc, hit = prefetches[r.key]
+				if !hit {
 					sc = c.spawn(r.key, ready, done, next)
 					prefetches[r.key] = sc
 				}
+			}
+
+			switch {
+			case !hit:
+				cacheMissesInc()
+			case sc.negative():
+				cacheHitsIncDenial()
+			default:
+				cacheHitsIncSuccess()
 			}
 
 			select {
@@ -122,15 +145,16 @@ func (c *cache) spawn(key key, ready chan<- *serviceCache, done chan<- *serviceC
 	}
 
 	log.Printf("[INFO] %s: fetching", key)
+	cachePrefetchesInc()
+
 	go func() {
-		services, err := sc.load()
-		if err != nil {
-			sc.err = err
-			log.Printf("[ERROR] %s: %v", key, err)
+		sc.services, sc.err = sc.load()
+		if sc.err != nil {
+			log.Printf("[ERROR] %s: %v", key, sc.err)
 		} else {
-			log.Printf("[INFO] %s: cached %d service endpoints", key, len(services))
+			log.Printf("[INFO] %s: cached %d service endpoints", key, len(sc.services))
 		}
-		go sc.serve(reqs, done, next, services)
+		go sc.serve(reqs, done, next)
 		ready <- sc
 	}()
 
@@ -148,11 +172,14 @@ type serviceCache struct {
 	prefetchDuration   time.Duration
 	transport          http.RoundTripper
 	rand               *rand.Rand
+	services           []service
 }
+
+func (c *serviceCache) negative() bool { return c.err != nil }
 
 func (c *serviceCache) close() { close(c.reqs) }
 
-func (c *serviceCache) serve(reqs <-chan serviceRequest, done chan<- *serviceCache, next chan<- key, services []service) {
+func (c *serviceCache) serve(reqs <-chan serviceRequest, done chan<- *serviceCache, next chan<- key) {
 	const timeBuckets = 4
 	deadline := time.Now().Add(c.ttl)
 
@@ -170,10 +197,10 @@ func (c *serviceCache) serve(reqs <-chan serviceRequest, done chan<- *serviceCac
 	roundRobin := 0
 
 	get := func() (srv service) {
-		if len(services) != 0 {
+		if len(c.services) != 0 {
 			index := roundRobin
-			roundRobin = (roundRobin + 1) % len(services)
-			srv = services[index]
+			roundRobin = (roundRobin + 1) % len(c.services)
+			srv = c.services[index]
 		}
 		return
 	}
