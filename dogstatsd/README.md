@@ -20,7 +20,7 @@ directly push its metrics to a dogstatsd agent over UDP.
 ## Syntax
 
 ~~~ txt
-consul [ADDR:PORT]
+dogstatsd [ADDR:PORT]
 ~~~
 
 * **ADDR** Address at which a dogstatsd agent is available. It may be prefixed
@@ -40,15 +40,11 @@ dogstatsd [ADDR:PORT] {
 }
 ~~~
 
-* **ttl** configured how long responses from querying lists of services from
-  consul are cached for. **DURATION** defaults to 1m.
-* `prefetch` will prefetch popular items when they are about to be expunged
-  from the cache.
-  Popular means **AMOUNT** queries have been seen with no gaps of **DURATION**
-  or more between them. **DURATION** defaults to 1m. Prefetching will happen
-  when the TTL drops below **PERCENTAGE**, which defaults to `10%`, or latest 1
-  second before TTL expiration. Values should be in the range `[10%, 90%]`.
-  Note the percent sign is mandatory. **PERCENTAGE** is treated as an `int`.
+* **buffer** configures the size of the client buffer used to push metrics to a
+dogstatsd agent. This must not exceed the size of the receive buffer used by the
+agent. The minimum size is 512 B, the maximum is 64 KB.
+* **flush** configures the time interval between flushes of metrics to a
+dogstatsd agent. The minimum interval is 1 second, there is not maximum.
 
 ## Examples
 
