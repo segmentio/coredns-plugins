@@ -5,7 +5,7 @@ jobs:
       - image: circleci/golang:1.9
     steps:
       - checkout
-      - dep: go get -v ./consul
+      - run: go get -v ./consul
       - run: go test -v -race ./consul
 
 workflows:
