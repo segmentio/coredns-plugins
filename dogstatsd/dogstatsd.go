@@ -1,5 +1,23 @@
 package dogstatsd
 
+// A word about the dogstatsd plugin implementation
+// ------------------------------------------------
+//
+// Prometheus is used to collect metrics across coredns. In order to publish
+// those metrics to a dogstatsd agent, the plugin acts as an internal collector
+// that scraps the metrics at regular interval (just like prometheus would do),
+// and publish them to the datadog agent.
+//
+// The complex parts about bridging between prometheus and dogstatsd are the
+// subtle variations in how they implement similar concepts. For example, in
+// prometheus counters are always incrementing values, but in dogstatsd only
+// the increments are published. Same goes with the summaries and historigrams
+// of prometheus, which are merged into a single histogram concept in dogstatsd.
+//
+// In order to provide meaningful insights, the translation layer has to
+// remember the state of the previous iteration in order to compute values to
+// push to the dogstatsd agent.
+
 import (
 	"context"
 	"log"
