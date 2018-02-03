@@ -1,6 +1,3 @@
-# consul
-
-## Name
 # dogstatsd
 
 ## Name
