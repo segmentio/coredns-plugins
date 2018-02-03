@@ -1,4 +1,4 @@
-package coredns_consul
+package consul
 
 import (
 	"testing"

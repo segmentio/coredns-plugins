@@ -1,4 +1,4 @@
-package coredns_consul
+package consul
 
 import (
 	"fmt"
@@ -39,7 +39,7 @@ func setupConsul(c *caddy.Controller) error {
 
 func parseConsul(c *caddy.Controller) (*Consul, error) {
 	if !c.Next() { // 'consul'
-		return nil, c.Err("expected 'consul' token at the beggining of the consul plugin configuration block")
+		return nil, c.Err("expected 'consul' token at the beginning of the consul plugin configuration block")
 	}
 
 	consulPlugin := New()

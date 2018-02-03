@@ -11,7 +11,7 @@ service discory in an infrastructure. However, the implementation has major
 limitations:
 
 - Latency of DNS lookups increases linearly with the number of services
-registerd under the same name. Large infrastructures must use a DNS caching and
+registered under the same name. Large infrastructures must use a DNS caching and
 load balacing layer in order to achieve acceptable performances.
 
 - In order to offer proper DNS load balancing, the DNS server running in front

@@ -1,4 +1,4 @@
-package coredns_consul
+package consul
 
 import (
 	"context"
@@ -55,7 +55,7 @@ const (
 	defaultPrefetchDuration   = 1 * time.Minute
 )
 
-// Consul constructs a new instance of a consul plugin.
+// New constructs a new instance of a consul plugin.
 func New() *Consul {
 	return &Consul{
 		Addr:               defaultAddr,
