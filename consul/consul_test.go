@@ -44,8 +44,8 @@ func TestConsul(t *testing.T) {
 			qname:    "service-1.service.consul.",
 			qtype:    dns.TypeA,
 			replies: []*dns.Msg{
-				&dns.Msg{Answer: []dns.RR{rrA("service-1.service.consul.", "192.168.0.1")}},
-				&dns.Msg{Answer: []dns.RR{rrA("service-1.service.consul.", "192.168.0.2")}},
+				{Answer: []dns.RR{rrA("service-1.service.consul.", "192.168.0.1")}},
+				{Answer: []dns.RR{rrA("service-1.service.consul.", "192.168.0.2")}},
 			},
 		},
 
@@ -54,7 +54,7 @@ func TestConsul(t *testing.T) {
 			qname:    "service-1.service.consul.",
 			qtype:    dns.TypeAAAA,
 			replies: []*dns.Msg{
-				&dns.Msg{Answer: []dns.RR{rrAAAA("service-1.service.consul.", "2001:db8:85a3::8a2e:370:7334")}},
+				{Answer: []dns.RR{rrAAAA("service-1.service.consul.", "2001:db8:85a3::8a2e:370:7334")}},
 			},
 		},
 
@@ -63,9 +63,9 @@ func TestConsul(t *testing.T) {
 			qname:    "service-1.service.consul.",
 			qtype:    dns.TypeANY,
 			replies: []*dns.Msg{
-				&dns.Msg{Answer: []dns.RR{rrA("service-1.service.consul.", "192.168.0.1")}},
-				&dns.Msg{Answer: []dns.RR{rrA("service-1.service.consul.", "192.168.0.2")}},
-				&dns.Msg{Answer: []dns.RR{rrAAAA("service-1.service.consul.", "2001:db8:85a3::8a2e:370:7334")}},
+				{Answer: []dns.RR{rrA("service-1.service.consul.", "192.168.0.1")}},
+				{Answer: []dns.RR{rrA("service-1.service.consul.", "192.168.0.2")}},
+				{Answer: []dns.RR{rrAAAA("service-1.service.consul.", "2001:db8:85a3::8a2e:370:7334")}},
 			},
 		},
 
@@ -74,10 +74,10 @@ func TestConsul(t *testing.T) {
 			qname:    "service-1.service.consul.",
 			qtype:    dns.TypeSRV,
 			replies: []*dns.Msg{
-				&dns.Msg{Answer: []dns.RR{rrSRV("service-1.service.consul.", "host-1.local.domain.", 10001)}, Extra: []dns.RR{rrA("host-1.local.domain.", "192.168.0.1")}},
-				&dns.Msg{Answer: []dns.RR{rrSRV("service-1.service.consul.", "host-1.local.domain.", 10004)}, Extra: []dns.RR{rrA("host-1.local.domain.", "192.168.0.1")}},
-				&dns.Msg{Answer: []dns.RR{rrSRV("service-1.service.consul.", "host-2.local.domain.", 10011)}, Extra: []dns.RR{rrA("host-2.local.domain.", "192.168.0.2")}},
-				&dns.Msg{Answer: []dns.RR{rrSRV("service-1.service.consul.", "host-3.local.domain.", 10021)}, Extra: []dns.RR{rrAAAA("host-3.local.domain.", "2001:db8:85a3::8a2e:370:7334")}},
+				{Answer: []dns.RR{rrSRV("service-1.service.consul.", "host-1.local.domain.", 10001)}, Extra: []dns.RR{rrA("host-1.local.domain.", "192.168.0.1")}},
+				{Answer: []dns.RR{rrSRV("service-1.service.consul.", "host-1.local.domain.", 10004)}, Extra: []dns.RR{rrA("host-1.local.domain.", "192.168.0.1")}},
+				{Answer: []dns.RR{rrSRV("service-1.service.consul.", "host-2.local.domain.", 10011)}, Extra: []dns.RR{rrA("host-2.local.domain.", "192.168.0.2")}},
+				{Answer: []dns.RR{rrSRV("service-1.service.consul.", "host-3.local.domain.", 10021)}, Extra: []dns.RR{rrAAAA("host-3.local.domain.", "2001:db8:85a3::8a2e:370:7334")}},
 			},
 		},
 
@@ -86,10 +86,10 @@ func TestConsul(t *testing.T) {
 			qname:    "_service-1._tcp.service.consul.",
 			qtype:    dns.TypeSRV,
 			replies: []*dns.Msg{
-				&dns.Msg{Answer: []dns.RR{rrSRV("_service-1._tcp.service.consul.", "host-1.local.domain.", 10001)}, Extra: []dns.RR{rrA("host-1.local.domain.", "192.168.0.1")}},
-				&dns.Msg{Answer: []dns.RR{rrSRV("_service-1._tcp.service.consul.", "host-1.local.domain.", 10004)}, Extra: []dns.RR{rrA("host-1.local.domain.", "192.168.0.1")}},
-				&dns.Msg{Answer: []dns.RR{rrSRV("_service-1._tcp.service.consul.", "host-2.local.domain.", 10011)}, Extra: []dns.RR{rrA("host-2.local.domain.", "192.168.0.2")}},
-				&dns.Msg{Answer: []dns.RR{rrSRV("_service-1._tcp.service.consul.", "host-3.local.domain.", 10021)}, Extra: []dns.RR{rrAAAA("host-3.local.domain.", "2001:db8:85a3::8a2e:370:7334")}},
+				{Answer: []dns.RR{rrSRV("_service-1._tcp.service.consul.", "host-1.local.domain.", 10001)}, Extra: []dns.RR{rrA("host-1.local.domain.", "192.168.0.1")}},
+				{Answer: []dns.RR{rrSRV("_service-1._tcp.service.consul.", "host-1.local.domain.", 10004)}, Extra: []dns.RR{rrA("host-1.local.domain.", "192.168.0.1")}},
+				{Answer: []dns.RR{rrSRV("_service-1._tcp.service.consul.", "host-2.local.domain.", 10011)}, Extra: []dns.RR{rrA("host-2.local.domain.", "192.168.0.2")}},
+				{Answer: []dns.RR{rrSRV("_service-1._tcp.service.consul.", "host-3.local.domain.", 10021)}, Extra: []dns.RR{rrAAAA("host-3.local.domain.", "2001:db8:85a3::8a2e:370:7334")}},
 			},
 		},
 
@@ -98,9 +98,9 @@ func TestConsul(t *testing.T) {
 			qname:    "zone-1.service-1.service.consul.",
 			qtype:    dns.TypeSRV,
 			replies: []*dns.Msg{
-				&dns.Msg{Answer: []dns.RR{rrSRV("zone-1.service-1.service.consul.", "host-1.local.domain.", 10001)}, Extra: []dns.RR{rrA("host-1.local.domain.", "192.168.0.1")}},
-				&dns.Msg{Answer: []dns.RR{rrSRV("zone-1.service-1.service.consul.", "host-1.local.domain.", 10004)}, Extra: []dns.RR{rrA("host-1.local.domain.", "192.168.0.1")}},
-				&dns.Msg{Answer: []dns.RR{rrSRV("zone-1.service-1.service.consul.", "host-3.local.domain.", 10021)}, Extra: []dns.RR{rrAAAA("host-3.local.domain.", "2001:db8:85a3::8a2e:370:7334")}},
+				{Answer: []dns.RR{rrSRV("zone-1.service-1.service.consul.", "host-1.local.domain.", 10001)}, Extra: []dns.RR{rrA("host-1.local.domain.", "192.168.0.1")}},
+				{Answer: []dns.RR{rrSRV("zone-1.service-1.service.consul.", "host-1.local.domain.", 10004)}, Extra: []dns.RR{rrA("host-1.local.domain.", "192.168.0.1")}},
+				{Answer: []dns.RR{rrSRV("zone-1.service-1.service.consul.", "host-3.local.domain.", 10021)}, Extra: []dns.RR{rrAAAA("host-3.local.domain.", "2001:db8:85a3::8a2e:370:7334")}},
 			},
 		},
 
@@ -109,9 +109,9 @@ func TestConsul(t *testing.T) {
 			qname:    "_service-1._zone-1.service.consul.",
 			qtype:    dns.TypeSRV,
 			replies: []*dns.Msg{
-				&dns.Msg{Answer: []dns.RR{rrSRV("_service-1._zone-1.service.consul.", "host-1.local.domain.", 10001)}, Extra: []dns.RR{rrA("host-1.local.domain.", "192.168.0.1")}},
-				&dns.Msg{Answer: []dns.RR{rrSRV("_service-1._zone-1.service.consul.", "host-1.local.domain.", 10004)}, Extra: []dns.RR{rrA("host-1.local.domain.", "192.168.0.1")}},
-				&dns.Msg{Answer: []dns.RR{rrSRV("_service-1._zone-1.service.consul.", "host-3.local.domain.", 10021)}, Extra: []dns.RR{rrAAAA("host-3.local.domain.", "2001:db8:85a3::8a2e:370:7334")}},
+				{Answer: []dns.RR{rrSRV("_service-1._zone-1.service.consul.", "host-1.local.domain.", 10001)}, Extra: []dns.RR{rrA("host-1.local.domain.", "192.168.0.1")}},
+				{Answer: []dns.RR{rrSRV("_service-1._zone-1.service.consul.", "host-1.local.domain.", 10004)}, Extra: []dns.RR{rrA("host-1.local.domain.", "192.168.0.1")}},
+				{Answer: []dns.RR{rrSRV("_service-1._zone-1.service.consul.", "host-3.local.domain.", 10021)}, Extra: []dns.RR{rrAAAA("host-3.local.domain.", "2001:db8:85a3::8a2e:370:7334")}},
 			},
 		},
 
@@ -148,8 +148,8 @@ func TestConsul(t *testing.T) {
 			qname:    "service-1.service.dc1.consul.",
 			qtype:    dns.TypeA,
 			replies: []*dns.Msg{
-				&dns.Msg{Answer: []dns.RR{rrA("service-1.service.dc1.consul.", "192.168.0.1")}},
-				&dns.Msg{Answer: []dns.RR{rrA("service-1.service.dc1.consul.", "192.168.0.2")}},
+				{Answer: []dns.RR{rrA("service-1.service.dc1.consul.", "192.168.0.1")}},
+				{Answer: []dns.RR{rrA("service-1.service.dc1.consul.", "192.168.0.2")}},
 			},
 		},
 
@@ -165,10 +165,10 @@ func TestConsul(t *testing.T) {
 			qname:    "_service-1._tcp.service.dc1.consul.",
 			qtype:    dns.TypeSRV,
 			replies: []*dns.Msg{
-				&dns.Msg{Answer: []dns.RR{rrSRV("_service-1._tcp.service.dc1.consul.", "host-1.local.domain.", 10001)}, Extra: []dns.RR{rrA("host-1.local.domain.", "192.168.0.1")}},
-				&dns.Msg{Answer: []dns.RR{rrSRV("_service-1._tcp.service.dc1.consul.", "host-1.local.domain.", 10004)}, Extra: []dns.RR{rrA("host-1.local.domain.", "192.168.0.1")}},
-				&dns.Msg{Answer: []dns.RR{rrSRV("_service-1._tcp.service.dc1.consul.", "host-2.local.domain.", 10011)}, Extra: []dns.RR{rrA("host-2.local.domain.", "192.168.0.2")}},
-				&dns.Msg{Answer: []dns.RR{rrSRV("_service-1._tcp.service.dc1.consul.", "host-3.local.domain.", 10021)}, Extra: []dns.RR{rrAAAA("host-3.local.domain.", "2001:db8:85a3::8a2e:370:7334")}},
+				{Answer: []dns.RR{rrSRV("_service-1._tcp.service.dc1.consul.", "host-1.local.domain.", 10001)}, Extra: []dns.RR{rrA("host-1.local.domain.", "192.168.0.1")}},
+				{Answer: []dns.RR{rrSRV("_service-1._tcp.service.dc1.consul.", "host-1.local.domain.", 10004)}, Extra: []dns.RR{rrA("host-1.local.domain.", "192.168.0.1")}},
+				{Answer: []dns.RR{rrSRV("_service-1._tcp.service.dc1.consul.", "host-2.local.domain.", 10011)}, Extra: []dns.RR{rrA("host-2.local.domain.", "192.168.0.2")}},
+				{Answer: []dns.RR{rrSRV("_service-1._tcp.service.dc1.consul.", "host-3.local.domain.", 10021)}, Extra: []dns.RR{rrAAAA("host-3.local.domain.", "2001:db8:85a3::8a2e:370:7334")}},
 			},
 		},
 
