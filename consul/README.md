@@ -66,3 +66,8 @@ prefetch those that have been queried more than twice over 10s.
     }
 }
 ~~~
+
+### plugins.cfg
+
+This plugin is intended to appear twoard the end of the plugin list, usually
+near the `proxy` plugin declaration.
