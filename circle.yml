@@ -1,6 +1,7 @@
 version: 2
 jobs:
   test-consul:
+    working_directory: /go/src/github.com/segmentio/coredns-plugins
     docker:
       - image: circleci/golang:1.9
     steps:
