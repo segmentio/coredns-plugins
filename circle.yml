@@ -1,8 +1,11 @@
 version: 2
 jobs:
   test-consul:
+    docker:
+      - image: circleci/golang:1.9
     steps:
-      - go test -v -race ./consul
+      - checkout
+      - run: go test -v -race ./consul
 
 workflows:
   version: 2
