@@ -55,6 +55,7 @@ dispatchRequests:
 		case key := <-next:
 			if _, alreadyPrefetching := prefetches[key]; !alreadyPrefetching {
 				prefetches[key] = c.spawn(key, ready, done, next)
+				cachePrefetchesInc()
 			}
 
 		case sc := <-ready:
@@ -69,6 +70,7 @@ dispatchRequests:
 				} else {
 					cacheSizeAddSuccess(1)
 					cacheServicesAdd(len(sc.services))
+					cacheFetchSizesObserve(len(sc.services))
 				}
 			}
 
@@ -83,16 +85,8 @@ dispatchRequests:
 				if !hit {
 					sc = c.spawn(r.key, ready, done, next)
 					prefetches[r.key] = sc
+					cacheMissesInc()
 				}
-			}
-
-			switch {
-			case !hit:
-				cacheMissesInc()
-			case sc.negative():
-				cacheHitsIncDenial()
-			default:
-				cacheHitsIncSuccess()
 			}
 
 			select {
@@ -145,7 +139,6 @@ func (c *cache) spawn(key key, ready chan<- *serviceCache, done chan<- *serviceC
 	}
 
 	log.Printf("[INFO] %s: fetching", key)
-	cachePrefetchesInc()
 
 	go func() {
 		sc.services, sc.err = sc.load()
@@ -216,8 +209,10 @@ func (c *serviceCache) serve(reqs <-chan serviceRequest, done chan<- *serviceCac
 	respond := func(req serviceRequest) {
 		if c.err != nil {
 			req.reject(c.err)
+			cacheHitsIncDenial()
 		} else {
 			req.resolve(get(), ttl())
+			cacheHitsIncSuccess()
 		}
 	}
 

@@ -61,6 +61,8 @@ If monitoring is enabled (via the *prometheus* directive) then the following met
 * `coredns_consul_cache_services_total{}` - Total number of service endpoints cached.
 * `coredns_consul_cache_hits_total{type}` - Counter of cache hits by cache type.
 * `coredns_consul_cache_misses_total{}` - Counter of cache misses.
+* `coredns_consul_cache_prefetch_total{}` - Counter of cache prefetches.
+* `coredns_consul_cache_fetch_size{}` - Histogram of response sizes from requests to consul.
 
 Cache types are either "denial" or "success".
 

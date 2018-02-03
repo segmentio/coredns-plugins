@@ -53,15 +53,23 @@ var (
 		Name:      "prefetch_total",
 		Help:      "The number of time the cache has prefetched a cached item.",
 	})
+
+	cacheFetchSizes = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: plugin.Namespace,
+		Subsystem: consulSubsystem,
+		Name:      "fetch_size",
+		Help:      "The distribution of response sizes to Consul requests.",
+	})
 )
 
-func cacheSizeAddSuccess(n int) { cacheSize.WithLabelValues(success).Set(float64(n)) }
-func cacheSizeAddDenial(n int)  { cacheSize.WithLabelValues(denial).Set(float64(n)) }
-func cacheServicesAdd(n int)    { cacheServices.Add(float64(n)) }
-func cacheHitsIncSuccess()      { cacheHits.WithLabelValues(success).Inc() }
-func cacheHitsIncDenial()       { cacheHits.WithLabelValues(denial).Inc() }
-func cacheMissesInc()           { cacheMisses.Inc() }
-func cachePrefetchesInc()       { cachePrefetches.Inc() }
+func cacheSizeAddSuccess(n int)    { cacheSize.WithLabelValues(success).Add(float64(n)) }
+func cacheSizeAddDenial(n int)     { cacheSize.WithLabelValues(denial).Add(float64(n)) }
+func cacheServicesAdd(n int)       { cacheServices.Add(float64(n)) }
+func cacheHitsIncSuccess()         { cacheHits.WithLabelValues(success).Inc() }
+func cacheHitsIncDenial()          { cacheHits.WithLabelValues(denial).Inc() }
+func cacheMissesInc()              { cacheMisses.Inc() }
+func cachePrefetchesInc()          { cachePrefetches.Inc() }
+func cacheFetchSizesObserve(n int) { cacheFetchSizes.Observe(float64(n)) }
 
 func initializeMetrics() {
 	cacheSize.WithLabelValues(success)
@@ -82,6 +90,7 @@ func registerMetrics(c *caddy.Controller) error {
 			r.MustRegister(cacheHits)
 			r.MustRegister(cacheMisses)
 			r.MustRegister(cachePrefetches)
+			r.MustRegister(cacheFetchSizes)
 		}
 	})
 	return nil
