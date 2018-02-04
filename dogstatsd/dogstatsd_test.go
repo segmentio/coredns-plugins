@@ -87,8 +87,8 @@ func testDogstatsdSimple(t *testing.T, plugin *Dogstatsd, server server, state s
 	counter2.Add(1)
 	gauge1.Set(10)
 	histogram1.Observe(0)
-	histogram1.Observe(12)
-	histogram1.Observe(12)
+	histogram1.Observe(42)
+	histogram1.Observe(42)
 
 	plugin.pulse(state)
 	assertRead(t, server,
@@ -96,7 +96,7 @@ func testDogstatsdSimple(t *testing.T, plugin *Dogstatsd, server server, state s
 		"coredns.segment.counter2:1|c",
 		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
 		"coredns.segment.histogram1:0|h",
-		"coredns.segment.histogram1:10|h|@0.5",
+		"coredns.segment.histogram1:40|h|@0.5",
 	)
 }
 

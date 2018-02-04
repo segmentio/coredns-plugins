@@ -61,8 +61,6 @@ func makeMetrics(f *dto.MetricFamily, m *dto.Metric, rand func(min, max float64)
 		acc := uint64(0)
 		min := 0.0
 
-		//fmt.Printf("%+v\n", buckets)
-
 		for index, bucket := range buckets {
 			cct := *bucket.CumulativeCount
 			max := *bucket.UpperBound
