@@ -7,10 +7,10 @@ import (
 )
 
 type key struct {
-	kind   kind
-	name   string
-	tags   tags
-	bucket int
+	kind  kind
+	name  string
+	tags  tags
+	index int
 }
 
 type kind int
@@ -28,17 +28,13 @@ type metric struct {
 	rate  float64
 	tags  tags
 
-	// bucket is the index of the histogram bucket that the metric was generated
-	// from. The count, min, and max values are used to represent the number of
-	// values observed by the histogram bucket and the range in which they were
-	// observed.
-	bucket int
-	count  uint64
-	min    float64
-	max    float64
+	// index of the histogram bucket that the metric was generated from.
+	index   int
+	count   uint64
+	version uint64
 }
 
-func makeMetrics(f *dto.MetricFamily, m *dto.Metric) []metric {
+func makeMetrics(f *dto.MetricFamily, m *dto.Metric, rand func(min, max float64) float64) []metric {
 	tags := makeTags(m)
 
 	switch *f.Type {
@@ -62,24 +58,27 @@ func makeMetrics(f *dto.MetricFamily, m *dto.Metric) []metric {
 		buckets := m.Histogram.Bucket
 		metrics := make([]metric, 0, len(buckets))
 		name := *f.Name
-		count := uint64(0)
+		acc := uint64(0)
 		min := 0.0
 
+		//fmt.Printf("%+v\n", buckets)
+
 		for index, bucket := range buckets {
-			cum := *bucket.CumulativeCount
+			cct := *bucket.CumulativeCount
 			max := *bucket.UpperBound
 
 			metrics = append(metrics, metric{
-				kind:   histogram,
-				name:   name,
-				tags:   tags,
-				bucket: index,
-				count:  cum - count,
-				min:    min,
-				max:    max,
+				kind:    histogram,
+				name:    name,
+				value:   rand(min, max),
+				tags:    tags,
+				index:   index,
+				count:   cct - acc,
+				version: cct,
 			})
 
-			count, min = cum, max
+			acc = cct
+			min = max
 		}
 
 		return metrics
@@ -217,66 +216,59 @@ func makeTags(m *dto.Metric) tags {
 
 type state map[key]metric
 
-func (s state) observe(m metric) (metrics []metric) {
+func (s state) observe(m metric) (metric, bool) {
 	k := key{
-		kind:   m.kind,
-		name:   m.name,
-		tags:   m.tags,
-		bucket: m.bucket,
+		kind:  m.kind,
+		name:  m.name,
+		tags:  m.tags,
+		index: m.index,
 	}
 
-	v, exist := s[k]
+	v, ok := s[k]
 
 	switch m.kind {
 	case counter:
 		// For counters we report the difference from the last value seen for
 		// the metric.
-		if !exist {
-			v = m
-			metrics = append(metrics, m)
-		} else {
-			delta := m.value - v.value
-			if delta < 0 { // counter reset
-				delta = m.value
-			}
-			if delta != 0 {
-				v.value = m.value
-				m.value = delta
-				metrics = append(metrics, m)
-			}
+		delta := m.value - v.value
+		if delta < 0 { // counter reset
+			delta = m.value
+		}
+		if ok = delta != 0; ok {
+			v, m.value = m, delta
 		}
 
 	case gauge:
 		// For gauges we simply set the value, the prometheus and dogstatsd
 		// metric models use the same gauge concept.
-		if !exist {
-			v = m
-			metrics = append(metrics, m)
-		} else if v.value != m.value {
-			v.value = m.value
-			metrics = append(metrics, m)
-		}
+		//
+		// Gauges are reported on every flush so the metric collection system
+		// does not "expire" them if it doesn't receive a value for a while.
+		v, ok = m, true
 
 	case histogram:
-		// For histograms we generate a list of metrics that represent discrete
-		// observations spread out across the histogram bucket range.
-		// The difference in cumulative count is used to determine how many
-		// metrics we generate.
+		// For histograms the appraoch is a bit more complex. Each bucket of a
+		// prometheus histogram is reported as an individual metric where the
+		// count is the number of changes that the bucket itself observed, and
+		// the version is the cummulative count of changes on the bucket and the
+		// buckets before it.
+		//
+		// Those two values must be taken into account to determine whether a
+		// change occured on the metric. If the version is the same as the last
+		// one we seen for the metric, then we are sure there were no changes.
+		// However the version may have changed due to a chance in a sub-bucket,
+		// which means we must also check the count of changes on the current
+		// bucket to determine where the changes occured.
+		//
+		// Finally, we adjust the rate of the metric to represent the weight of
+		// each bucket.
 		count := m.count - v.count
-		if count < 0 { // histogram reset
-			count = m.count
+		if ok = v.version != m.version && count != 0; ok {
+			m.rate = 1 / float64(count)
+			v = m
 		}
-		for i := uint64(0); i < count; i++ {
-			h := m
-			a := h.max - h.min
-			b := float64(i) + 0.5
-			c := float64(count)
-			h.value = h.min + ((a * b) / c)
-			metrics = append(metrics, h)
-		}
-		v = m
 	}
 
 	s[k] = v
-	return
+	return m, ok
 }

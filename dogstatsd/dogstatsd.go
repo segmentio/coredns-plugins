@@ -21,6 +21,7 @@ package dogstatsd
 import (
 	"context"
 	"log"
+	"math/rand"
 	"net"
 	"os"
 	"strings"
@@ -54,6 +55,10 @@ type Dogstatsd struct {
 	wg     sync.WaitGroup
 	ctx    context.Context
 	cancel context.CancelFunc
+
+	// Generates a random float64 value between min and max. It's made
+	// configurable so it can be mocked during tests.
+	randFloat64 func(min, max float64) float64
 }
 
 const (
@@ -137,11 +142,17 @@ func (d *Dogstatsd) collect(state state) ([]metric, error) {
 	}
 
 	metrics := make([]metric, 0, 2*len(metricFamilies))
+	rand := d.randFloat64
+	if rand == nil {
+		rand = randFloat64
+	}
 
 	for _, f := range metricFamilies {
 		for _, m := range f.Metric {
-			for _, v := range makeMetrics(f, m) {
-				metrics = append(metrics, state.observe(v)...)
+			for _, v := range makeMetrics(f, m, rand) {
+				if v, ok := state.observe(v); ok {
+					metrics = append(metrics, v)
+				}
 			}
 		}
 	}
@@ -253,4 +264,8 @@ func dial(address string, bufferSizeHint int) (conn net.Conn, bufferSize int, er
 	// Creating the file put the socket in blocking mode, reverting.
 	syscall.SetNonblock(fd, true)
 	return
+}
+
+func randFloat64(min, max float64) float64 {
+	return min + (rand.Float64() * (max - min))
 }

@@ -60,73 +60,136 @@ func TestDogstatsd(t *testing.T) {
 	plugin := dogstastdPlugin(server.addr())
 	state := make(state)
 
-	testDogstatsdSimple(t, plugin, server, state)
-	testDogstatsdRepeat(t, plugin, server, state)
-	testDogstatsdMerge(t, plugin, server, state)
+	for i := 0; i != 10; i++ {
+		t.Logf("#%d: simple/repeat/merge", i)
+		testDogstatsdSimple(t, plugin, server, state)
+		testDogstatsdRepeat(t, plugin, server, state)
+		testDogstatsdMerge(t, plugin, server, state)
+
+		t.Logf("#%d: simple 2x", i)
+		testDogstatsdSimple(t, plugin, server, state)
+		testDogstatsdSimple(t, plugin, server, state)
+
+		t.Logf("#%d: repeat 2x", i)
+		testDogstatsdRepeat(t, plugin, server, state)
+		testDogstatsdRepeat(t, plugin, server, state)
+
+		t.Logf("#%d: merge 2x", i)
+		testDogstatsdMerge(t, plugin, server, state)
+		testDogstatsdMerge(t, plugin, server, state)
+	}
 }
 
 func testDogstatsdSimple(t *testing.T, plugin *Dogstatsd, server server, state state) {
+	t.Helper()
+
 	counter1.Add(42)
 	counter2.Add(1)
 	gauge1.Set(10)
 	histogram1.Observe(0)
 	histogram1.Observe(12)
 	histogram1.Observe(12)
+
 	plugin.pulse(state)
 	assertRead(t, server,
 		"coredns.segment.counter1:42|c",
 		"coredns.segment.counter2:1|c",
 		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
-		"coredns.segment.histogram1:5|h",
-		"coredns.segment.histogram1:12.5|h",
-		"coredns.segment.histogram1:17.5|h",
+		"coredns.segment.histogram1:0|h",
+		"coredns.segment.histogram1:10|h|@0.5",
 	)
 }
 
 func testDogstatsdRepeat(t *testing.T, plugin *Dogstatsd, server server, state state) {
+	t.Helper()
+
 	for i := 0; i != 20; i++ {
 		counter2.Add(float64(i))
 		plugin.pulse(state)
 	}
+
 	assertRead(t, server,
+		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+
 		"coredns.segment.counter2:1|c",
+		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+
 		"coredns.segment.counter2:2|c",
+		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+
 		"coredns.segment.counter2:3|c",
+		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+
 		"coredns.segment.counter2:4|c",
+		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+
 		"coredns.segment.counter2:5|c",
+		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+
 		"coredns.segment.counter2:6|c",
+		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+
 		"coredns.segment.counter2:7|c",
+		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+
 		"coredns.segment.counter2:8|c",
+		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+
 		"coredns.segment.counter2:9|c",
+		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+
 		"coredns.segment.counter2:10|c",
+		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+
 		"coredns.segment.counter2:11|c",
+		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+
 		"coredns.segment.counter2:12|c",
+		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+
 		"coredns.segment.counter2:13|c",
+		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+
 		"coredns.segment.counter2:14|c",
+		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+
 		"coredns.segment.counter2:15|c",
+		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+
 		"coredns.segment.counter2:16|c",
+		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+
 		"coredns.segment.counter2:17|c",
+		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+
 		"coredns.segment.counter2:18|c",
+		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+
 		"coredns.segment.counter2:19|c",
+		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
 	)
 }
 
 func testDogstatsdMerge(t *testing.T, plugin *Dogstatsd, server server, state state) {
-	for i := 0; i != 10; i++ {
-		histogram1.Observe(float64(i))
+	t.Helper()
+
+	for i := 0; i != 100; i++ {
+		histogram1.Observe(float64(i + 1))
 	}
+
 	plugin.pulse(state)
 	assertRead(t, server,
-		"coredns.segment.histogram1:0.5|h",
-		"coredns.segment.histogram1:1.5|h",
-		"coredns.segment.histogram1:2.5|h",
-		"coredns.segment.histogram1:3.5|h",
-		"coredns.segment.histogram1:4.5|h",
-		"coredns.segment.histogram1:5.5|h",
-		"coredns.segment.histogram1:6.5|h",
-		"coredns.segment.histogram1:7.5|h",
-		"coredns.segment.histogram1:8.5|h",
-		"coredns.segment.histogram1:9.5|h",
+		"coredns.segment.histogram1:0|h|@0.1",
+		"coredns.segment.histogram1:10|h|@0.1",
+		"coredns.segment.histogram1:20|h|@0.1",
+		"coredns.segment.histogram1:30|h|@0.1",
+		"coredns.segment.histogram1:40|h|@0.1",
+		"coredns.segment.histogram1:50|h|@0.1",
+		"coredns.segment.histogram1:60|h|@0.1",
+		"coredns.segment.histogram1:70|h|@0.1",
+		"coredns.segment.histogram1:80|h|@0.1",
+		"coredns.segment.histogram1:90|h|@0.1",
+		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
 	)
 }
 
@@ -141,6 +204,7 @@ func dogstastdPlugin(addr string) *Dogstatsd {
 		gauge1,
 		histogram1,
 	)
+	plugin.randFloat64 = func(min, max float64) float64 { return min }
 	return plugin
 }
 
@@ -183,6 +247,8 @@ func (s server) addr() string {
 }
 
 func assertRead(t *testing.T, s server, packets ...string) {
+	t.Helper()
+
 	found := make([]string, 0, len(packets))
 	expected := make([]string, len(packets))
 	copy(expected, packets)
