@@ -9,3 +9,4 @@ Envoy!
 ## Plugins
 
 - [consul](https://github.com/segmentio/coredns-plugins/blob/master/consul)
+- [dogstatsd](https://github.com/segmentio/coredns-plugins/blob/master/dogstatsd)
