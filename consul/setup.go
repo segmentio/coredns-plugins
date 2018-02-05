@@ -30,10 +30,14 @@ func setupConsul(c *caddy.Controller) error {
 	if err != nil {
 		return err
 	}
+
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
 		consulPlugin.Next = next
 		return consulPlugin
 	})
+
+	c.OnStartup(func() error { return registerMetrics(c) })
+	initializeMetrics()
 	return nil
 }
 

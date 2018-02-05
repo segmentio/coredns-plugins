@@ -53,6 +53,19 @@ consul [ADDR:PORT] {
   second before TTL expiration. Values should be in the range `[10%, 90%]`.
   Note the percent sign is mandatory. **PERCENTAGE** is treated as an `int`.
 
+## Metrics
+
+If monitoring is enabled (via the *prometheus* directive) then the following metrics are exported:
+
+* `coredns_consul_cache_size{type}` - Total elements in the cache by cache type.
+* `coredns_consul_cache_services_total{}` - Total number of service endpoints cached.
+* `coredns_consul_cache_hits_total{type}` - Counter of cache hits by cache type.
+* `coredns_consul_cache_misses_total{}` - Counter of cache misses.
+* `coredns_consul_cache_prefetch_total{}` - Counter of cache prefetches.
+* `coredns_consul_cache_fetch_size{}` - Histogram of response sizes from requests to consul.
+
+Cache types are either "denial" or "success".
+
 ## Examples
 
 Enable the consul plugin, expire cached entries after 10s and prefetch those
@@ -67,7 +80,7 @@ that have been queried more than twice over 10s.
 }
 ~~~
 
-### plugins.cfg
+### plugin.cfg
 
 This plugin is intended to appear twoard the end of the plugin list, usually
 near the `proxy` plugin declaration.
