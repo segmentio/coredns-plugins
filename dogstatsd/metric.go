@@ -176,7 +176,7 @@ func isValidNameRune(c rune) bool {
 }
 
 func isValidTagRune(c rune) bool {
-	return isAlphaNum(c) || isUnderscore(c) || isPeriod(c) || isMinus(c) || isSlash(c)
+	return isAlphaNum(c) || isUnderscore(c) || isPeriod(c) || isMinus(c) || isSlash(c) || isColumn(c)
 }
 
 func isAlphaNum(c rune) bool   { return isAlpha(c) || isNum(c) }
