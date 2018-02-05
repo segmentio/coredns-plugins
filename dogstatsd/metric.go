@@ -144,10 +144,10 @@ func appendTagName(b []byte, s string) []byte {
 		case isColumn(c):
 			// Not sure prometheus allows it but just in case.
 			b = append(b, '_')
+		case isAlphaUpper(c):
+			c = toLower(c)
+			fallthrough
 		case isValidTagRune(c):
-			if isAlphaUpper(c) {
-				c = toLower(c)
-			}
 			b = append(b, byte(c))
 		default:
 			b = append(b, '_')
@@ -159,10 +159,10 @@ func appendTagName(b []byte, s string) []byte {
 func appendTagValue(b []byte, s string) []byte {
 	for _, c := range s {
 		switch {
+		case isAlphaUpper(c):
+			c = toLower(c)
+			fallthrough
 		case isValidNameRune(c):
-			if isAlphaUpper(c) {
-				c = toLower(c)
-			}
 			b = append(b, byte(c))
 		default:
 			b = append(b, '_')
