@@ -25,6 +25,21 @@ func setup(c *caddy.Controller) error {
 		return plugin.Error("dogstatsd", err)
 	}
 
+	// If the prometheus plugin wasn't registered, add one so we can collect
+	// metrics of other plugins (and DNS handler metrics for this zone as well).
+	if m, _ := dnsserver.GetConfig(c).Handler("prometheus").(*metrics.Metrics); m == nil {
+		m = metrics.New("")
+
+		for _, z := range d.ZoneNames {
+			m.AddZone(z)
+		}
+
+		dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
+			m.Next = next
+			return m
+		})
+	}
+
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
 		d.Next = next
 		return d
@@ -35,9 +50,7 @@ func setup(c *caddy.Controller) error {
 		if m == nil {
 			return errors.New("the dogstatsd plugin requires the prometheus plugin to be loaded, add 'prometheus' to the zone configuration block where 'dogstatsd' is declared")
 		}
-
 		d.Reg = m.Reg
-		d.ZoneNames = m.ZoneNames()
 		d.Start()
 		return nil
 	})
@@ -55,6 +68,10 @@ func dogstatsdParse(c *caddy.Controller) (*Dogstatsd, error) {
 	}
 
 	d := New()
+
+	for _, z := range c.ServerBlockKeys {
+		d.ZoneNames = append(d.ZoneNames, plugin.Host(z).Normalize())
+	}
 
 	switch args := c.RemainingArgs(); len(args) {
 	case 0:
