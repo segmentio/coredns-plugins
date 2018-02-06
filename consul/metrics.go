@@ -76,7 +76,7 @@ var (
 		Subsystem: consulSubsystem,
 		Name:      "fetch_duration_seconds",
 		Help:      "The distribution of response time to Consul requests.",
-		Buckets:   []float64{0.01, 0.05, 0.1, 0.5, 1, 5, 10, 30, 60},
+		Buckets:   []float64{0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 10, 30, 60},
 	})
 )
 

@@ -146,7 +146,6 @@ func (c *cache) spawn(key key, ready chan<- *serviceCache, done chan<- *serviceC
 	sc.ttl /= 2
 	sc.ttl += time.Duration(sc.rand.Int63n(int64(sc.ttl)))
 
-	log.Printf("[INFO] %s: fetching", key)
 	go func() {
 		t0 := time.Now()
 		sc.services, sc.err = sc.load()
