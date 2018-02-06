@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +17,10 @@ import (
 	corednstest "github.com/coredns/coredns/plugin/test"
 	"github.com/miekg/dns"
 )
+
+func init() {
+	log.SetOutput(ioutil.Discard)
+}
 
 func TestConsul(t *testing.T) {
 	services := []consulServerService{
@@ -224,41 +230,52 @@ func TestConsul(t *testing.T) {
 
 func consulServer(serverDC string, serverServices []consulServerService) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		const prefix = "/v1/health/service/"
-
-		if !strings.HasPrefix(r.URL.Path, prefix) {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-
-		var (
-			service = strings.TrimPrefix(r.URL.Path, prefix)
-			query   = r.URL.Query()
-			tag     = query.Get("tag")
-			dc      = query.Get("dc")
-			pass    = query.Get("passing")
-			results = make([]consulHealthService, 0, len(serverServices))
+		const (
+			v1AgentSelf     = "/v1/agent/self"
+			v1HealthService = "/v1/health/service/"
 		)
 
-		if len(dc) == 0 || dc == serverDC {
-			for _, srv := range serverServices {
-				if srv.name != service {
-					continue
+		switch {
+		case r.URL.Path == v1AgentSelf:
+			json.NewEncoder(w).Encode(consulAgent{
+				Config: consulAgentConfig{
+					Datacenter: serverDC,
+				},
+			})
+
+		case strings.HasPrefix(r.URL.Path, v1HealthService):
+			var (
+				service = strings.TrimPrefix(r.URL.Path, v1HealthService)
+				query   = r.URL.Query()
+				tag     = query.Get("tag")
+				dc      = query.Get("dc")
+				pass    = query.Get("passing")
+				results = make([]consulHealthService, 0, len(serverServices))
+			)
+
+			if len(dc) == 0 || dc == serverDC {
+				for _, srv := range serverServices {
+					if srv.name != service {
+						continue
+					}
+					if len(tag) != 0 && !srv.hasTag(tag) {
+						continue
+					}
+					if len(pass) != 0 && !srv.pass {
+						continue
+					}
+					results = append(results, consulHealthService{
+						Node:    consulNode{Node: srv.node},
+						Service: consulService{Address: srv.addr, Port: srv.port},
+					})
 				}
-				if len(tag) != 0 && !srv.hasTag(tag) {
-					continue
-				}
-				if len(pass) != 0 && !srv.pass {
-					continue
-				}
-				results = append(results, consulHealthService{
-					Node:    consulNode{Node: srv.node},
-					Service: consulService{Address: srv.addr, Port: srv.port},
-				})
 			}
+
+			json.NewEncoder(w).Encode(results)
+		default:
+			w.WriteHeader(http.StatusNotFound)
 		}
 
-		json.NewEncoder(w).Encode(results)
 	}))
 }
 

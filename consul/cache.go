@@ -309,7 +309,7 @@ func (c *serviceCache) load() ([]service, error) {
 	}
 	if res.StatusCode != http.StatusOK {
 		res.Body.Close()
-		return nil, fmt.Errorf("GET %s: %s", u, res.Status)
+		return nil, httpError(res)
 	}
 
 	var endpoints = make([]consulHealthService, 0, 100)
@@ -342,6 +342,11 @@ func (c *serviceCache) load() ([]service, error) {
 		services[i], services[j] = services[j], services[i]
 	}
 	return services, nil
+}
+
+func httpError(res *http.Response) error {
+	req := res.Request
+	return fmt.Errorf("%s %s: %s", req.Method, req.URL, res.Status)
 }
 
 type key struct {

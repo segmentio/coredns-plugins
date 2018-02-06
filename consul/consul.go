@@ -2,6 +2,7 @@ package consul
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net"
 	"net/http"
@@ -42,8 +43,9 @@ type Consul struct {
 	// HTTP transport used to send requests to consul.
 	Transport http.RoundTripper
 
-	once  sync.Once
+	mutex sync.RWMutex
 	cache *cache
+	agent consulAgent
 }
 
 const (
@@ -96,7 +98,13 @@ func (c *Consul) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 }
 
 func (c *Consul) serveDNS(ctx context.Context, state request.Request) (rcode int, answer dns.RR, extra dns.RR, err error) {
-	c.once.Do(c.init)
+	var cache *cache
+	var agent consulAgent
+
+	if cache, agent, err = c.grabCache(ctx); err != nil {
+		rcode = dns.RcodeServerFailure
+		return
+	}
 
 	qname := state.Name()
 	qtype := state.QType()
@@ -114,6 +122,9 @@ func (c *Consul) serveDNS(ctx context.Context, state request.Request) (rcode int
 		rcode = dns.RcodeNotImplemented
 		return
 	}
+	if len(dc) == 0 {
+		dc = agent.Config.Datacenter
+	}
 
 	key := key{name: name, tag: tag, dc: dc, qtype: qtype}
 	switch key.qtype {
@@ -129,7 +140,7 @@ func (c *Consul) serveDNS(ctx context.Context, state request.Request) (rcode int
 	req := serviceRequest{key: key, res: res}
 
 	select {
-	case c.cache.reqs <- req:
+	case cache.reqs <- req:
 	case <-ctx.Done():
 		rcode, err = dns.RcodeServerFailure, ctx.Err()
 		return
@@ -166,25 +177,36 @@ func (c *Consul) serveDNS(ctx context.Context, state request.Request) (rcode int
 	return
 }
 
-func (c *Consul) init() {
+func (c *Consul) grabCache(ctx context.Context) (*cache, consulAgent, error) {
+	var err error
+
+	c.mutex.RLock()
+	cache := c.cache
+	agent := c.agent
+	c.mutex.RUnlock()
+
+	if cache == nil {
+		c.mutex.Lock()
+		if cache = c.cache; cache == nil {
+			cache, agent, err = c.init(ctx)
+			if err == nil {
+				c.cache = cache
+				c.agent = agent
+			}
+		}
+		c.mutex.Unlock()
+	}
+
+	return cache, agent, err
+}
+
+func (c *Consul) init(ctx context.Context) (*cache, consulAgent, error) {
 	log.Printf("[INFO] consul %s { ttl %s; maxreq %d; prefetch %d %s %d%% }",
 		c.Addr, c.TTL, c.MaxRequests, c.PrefetchAmount, c.PrefetchDuration, c.PrefetchPercentage)
 
-	reqs := make(chan serviceRequest, c.MaxRequests)
-
-	cache := &cache{
-		reqs:               reqs,
-		addr:               c.Addr,
-		ttl:                c.TTL,
-		maxRequests:        c.MaxRequests,
-		prefetchAmount:     c.PrefetchAmount,
-		prefetchPercentage: c.PrefetchPercentage,
-		prefetchDuration:   c.PrefetchDuration,
-		transport:          c.Transport,
-	}
-
-	if cache.transport == nil {
-		cache.transport = &http.Transport{
+	var transport http.RoundTripper
+	if transport = c.Transport; transport == nil {
+		transport = &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
 			DialContext: (&net.Dialer{
 				Timeout:   10 * time.Second,
@@ -197,10 +219,57 @@ func (c *Consul) init() {
 		}
 	}
 
-	go cache.serve(reqs)
+	agent, err := c.fetchAgentInfo(ctx, transport)
+	if err != nil {
+		return nil, consulAgent{}, err
+	}
 
-	c.cache = cache
+	reqs := make(chan serviceRequest, c.MaxRequests)
+
+	cache := &cache{
+		reqs:               reqs,
+		addr:               c.Addr,
+		ttl:                c.TTL,
+		maxRequests:        c.MaxRequests,
+		prefetchAmount:     c.PrefetchAmount,
+		prefetchPercentage: c.PrefetchPercentage,
+		prefetchDuration:   c.PrefetchDuration,
+		transport:          transport,
+	}
+
+	go cache.serve(reqs)
 	runtime.SetFinalizer(c, func(c *Consul) { c.cache.close() })
+	return cache, agent, nil
+}
+
+func (c *Consul) fetchAgentInfo(ctx context.Context, transport http.RoundTripper) (agent consulAgent, err error) {
+	var req *http.Request
+	var res *http.Response
+
+	if req, err = http.NewRequest(http.MethodGet, c.Addr+"/v1/agent/self", nil); err != nil {
+		return
+	}
+	if res, err = transport.RoundTrip(req.WithContext(ctx)); err != nil {
+		return
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		err = httpError(res)
+		return
+	}
+
+	err = json.NewDecoder(res.Body).Decode(&agent)
+	return
+}
+
+// https://www.consul.io/api/agent.html#read-configuration
+type consulAgent struct {
+	Config consulAgentConfig
+}
+
+type consulAgentConfig struct {
+	Datacenter string
 }
 
 func splitName(s string) (name, tag, typ, dc, domain string) {
