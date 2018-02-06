@@ -65,7 +65,18 @@ dispatchRequests:
 				sc.close()
 			} else {
 				delete(prefetches, sc.key)
+				expired := caches[sc.key]
 				caches[sc.key] = sc
+
+				if expired != nil {
+					if expired.negative() {
+						cacheSizeAddDenial(-1)
+					} else {
+						cacheSizeAddSuccess(-1)
+						cacheServicesAdd(-len(expired.services))
+					}
+					expired.close()
+				}
 
 				if sc.negative() {
 					cacheSizeAddDenial(1)
