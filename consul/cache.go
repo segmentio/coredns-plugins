@@ -42,6 +42,7 @@ dispatchRequests:
 		case sc := <-done:
 			if caches[sc.key] == sc {
 				delete(caches, sc.key)
+				cacheEvictionsInc()
 				log.Printf("[INFO] %s: expired!", sc.key)
 
 				if sc.negative() {
@@ -141,7 +142,9 @@ func (c *cache) spawn(key key, ready chan<- *serviceCache, done chan<- *serviceC
 	log.Printf("[INFO] %s: fetching", key)
 
 	go func() {
+		t0 := time.Now()
 		sc.services, sc.err = sc.load()
+		t1 := time.Now()
 		if sc.err != nil {
 			log.Printf("[ERROR] %s: %v", key, sc.err)
 		} else {
@@ -149,6 +152,7 @@ func (c *cache) spawn(key key, ready chan<- *serviceCache, done chan<- *serviceC
 		}
 		go sc.serve(reqs, done, next)
 		ready <- sc
+		cacheFetchDurationsObserve(t1.Sub(t0))
 	}()
 
 	return sc
