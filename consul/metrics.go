@@ -94,10 +94,10 @@ func cacheFetchDurationsObserve(d time.Duration) {
 }
 
 func initializeMetrics() {
-	cacheSize.WithLabelValues(success)
-	cacheSize.WithLabelValues(denial)
-	cacheHits.WithLabelValues(success)
-	cacheHits.WithLabelValues(denial)
+	cacheSize.WithLabelValues(success).Set(0)
+	cacheSize.WithLabelValues(denial).Set(0)
+	cacheHits.WithLabelValues(success).Set(0)
+	cacheHits.WithLabelValues(denial).Set(0)
 }
 
 func registerMetrics(c *caddy.Controller) error {
@@ -113,8 +113,10 @@ func registerMetrics(c *caddy.Controller) error {
 			r.MustRegister(cacheServices)
 			r.MustRegister(cacheHits)
 			r.MustRegister(cacheMisses)
+			r.MustRegister(cacheEvictions)
 			r.MustRegister(cachePrefetches)
 			r.MustRegister(cacheFetchSizes)
+			r.MustRegister(cacheFetchDurations)
 		}
 	})
 	return nil
