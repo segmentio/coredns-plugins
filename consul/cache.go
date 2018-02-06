@@ -42,22 +42,25 @@ dispatchRequests:
 		case sc := <-done:
 			if caches[sc.key] == sc {
 				delete(caches, sc.key)
-				cacheEvictionsInc()
+
+				m := sc.key.metrics()
+				m.cacheEvictionsInc()
 
 				if sc.negative() {
 					log.Printf("[INFO] %s: negative cache expired", sc.key)
-					cacheSizeAddDenial(-1)
+					m.cacheSizeAddDenial(-1)
 				} else {
 					log.Printf("[INFO] %s: cache of %d services expired", sc.key, len(sc.services))
-					cacheSizeAddSuccess(-1)
-					cacheServicesAdd(-len(sc.services))
+					m.cacheSizeAddSuccess(-1)
+					m.cacheServicesAdd(-len(sc.services))
 				}
 			}
 
 		case key := <-next:
 			if _, alreadyPrefetching := prefetches[key]; !alreadyPrefetching {
 				prefetches[key] = c.spawn(key, ready, done, next)
-				cachePrefetchesInc()
+				m := key.metrics()
+				m.cachePrefetchesInc()
 			}
 
 		case sc := <-ready:
@@ -67,23 +70,24 @@ dispatchRequests:
 				delete(prefetches, sc.key)
 				expired := caches[sc.key]
 				caches[sc.key] = sc
+				m := sc.key.metrics()
 
 				if expired != nil {
 					if expired.negative() {
-						cacheSizeAddDenial(-1)
+						m.cacheSizeAddDenial(-1)
 					} else {
-						cacheSizeAddSuccess(-1)
-						cacheServicesAdd(-len(expired.services))
+						m.cacheSizeAddSuccess(-1)
+						m.cacheServicesAdd(-len(expired.services))
 					}
 					expired.close()
 				}
 
 				if sc.negative() {
-					cacheSizeAddDenial(1)
+					m.cacheSizeAddDenial(1)
 				} else {
-					cacheSizeAddSuccess(1)
-					cacheServicesAdd(len(sc.services))
-					cacheFetchSizesObserve(len(sc.services))
+					m.cacheSizeAddSuccess(1)
+					m.cacheServicesAdd(len(sc.services))
+					m.cacheFetchSizesObserve(len(sc.services))
 				}
 			}
 
@@ -98,7 +102,8 @@ dispatchRequests:
 				if !hit {
 					sc = c.spawn(r.key, ready, done, next)
 					prefetches[r.key] = sc
-					cacheMissesInc()
+					m := r.key.metrics()
+					m.cacheMissesInc()
 				}
 			}
 
@@ -173,7 +178,9 @@ func (c *cache) spawn(key key, ready chan<- *serviceCache, done chan<- *serviceC
 
 		go sc.serve(reqs, done, next)
 		ready <- sc
-		cacheFetchDurationsObserve(rtt)
+
+		m := sc.key.metrics()
+		m.cacheFetchDurationsObserve(rtt)
 	}()
 
 	return sc
@@ -210,6 +217,7 @@ func (c *serviceCache) serve(reqs <-chan serviceRequest, done chan<- *serviceCac
 	prefetchTrigger := time.NewTimer(c.ttl - ((c.ttl * time.Duration(c.prefetchPercentage)) / 100))
 	defer prefetchTrigger.Stop()
 
+	met := c.key.metrics()
 	hits := 0
 	prefetch := false
 	roundRobin := 0
@@ -234,10 +242,10 @@ func (c *serviceCache) serve(reqs <-chan serviceRequest, done chan<- *serviceCac
 	respond := func(req serviceRequest) {
 		if c.err != nil {
 			req.reject(c.err)
-			cacheHitsIncDenial()
+			met.cacheHitsIncDenial()
 		} else {
 			req.resolve(get(), ttl())
-			cacheHitsIncSuccess()
+			met.cacheHitsIncSuccess()
 		}
 	}
 
@@ -341,6 +349,10 @@ type key struct {
 	tag   string
 	dc    string
 	qtype uint16
+}
+
+func (k key) metrics() metrics {
+	return metrics{name: k.name, tag: k.tag, dc: k.dc}
 }
 
 func (k key) String() string {

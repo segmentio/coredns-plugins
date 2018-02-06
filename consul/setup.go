@@ -37,7 +37,6 @@ func setupConsul(c *caddy.Controller) error {
 	})
 
 	c.OnStartup(func() error { return registerMetrics(c) })
-	initializeMetrics()
 	return nil
 }
 
