@@ -51,6 +51,12 @@ type Dogstatsd struct {
 	// metrics are registered.
 	Reg *prometheus.Registry
 
+	// Those flags control whether this plugin instance is allowed to report
+	// go and process metrics. This is used because those metrics are global
+	// so it is OK if only a single plugin pushes them to the dogstatsd agent.
+	EnableGoMetrics      bool
+	EnableProcessMetrics bool
+
 	once   sync.Once
 	wg     sync.WaitGroup
 	ctx    context.Context
@@ -94,6 +100,7 @@ func (d *Dogstatsd) Start() {
 
 // Stop interrupts the runing plugin.
 func (d *Dogstatsd) Stop() {
+	d.once.Do(d.init)
 	d.cancel()
 	d.wg.Wait()
 }
@@ -150,8 +157,13 @@ func (d *Dogstatsd) collect(state state) ([]metric, error) {
 	for _, f := range metricFamilies {
 		for _, m := range f.Metric {
 			for _, v := range makeMetrics(f, m, rand) {
-				if v, ok := state.observe(v); ok {
-					metrics = append(metrics, v)
+				switch {
+				case !d.EnableGoMetrics && isGoMetric(v):
+				case !d.EnableProcessMetrics && isProcessMetric(v):
+				default:
+					if v, ok := state.observe(v); ok {
+						metrics = append(metrics, v)
+					}
 				}
 			}
 		}

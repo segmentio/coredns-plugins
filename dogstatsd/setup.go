@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coredns/coredns/core/dnsserver"
@@ -11,6 +12,8 @@ import (
 	"github.com/coredns/coredns/plugin/metrics"
 	"github.com/mholt/caddy"
 )
+
+var once sync.Once
 
 func init() {
 	caddy.RegisterPlugin("dogstatsd", caddy.Plugin{
@@ -35,7 +38,13 @@ func setup(c *caddy.Controller) error {
 		if m == nil {
 			return errors.New("the dogstatsd plugin requires the prometheus plugin to be loaded, add 'prometheus' to the zone configuration block where 'dogstatsd' is declared")
 		}
+
+		enableGlobalMetrics := false
+		once.Do(func() { enableGlobalMetrics = true })
+
 		d.Reg = m.Reg
+		d.EnableGoMetrics = enableGlobalMetrics
+		d.EnableProcessMetrics = enableGlobalMetrics
 		d.Start()
 		return nil
 	})

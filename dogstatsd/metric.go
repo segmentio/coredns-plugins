@@ -280,3 +280,11 @@ func (s state) observe(m metric) (metric, bool) {
 	s[k] = v
 	return m, ok
 }
+
+const (
+	goMetricPrefix      = plugin.Namespace + ".go."
+	processMetricPrefix = plugin.Namespace + ".process."
+)
+
+func isGoMetric(m metric) bool      { return strings.HasPrefix(m.name, goMetricPrefix) }
+func isProcessMetric(m metric) bool { return strings.HasPrefix(m.name, processMetricPrefix) }
