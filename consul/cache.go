@@ -152,7 +152,7 @@ func (c *cache) spawn(key key, ready chan<- *serviceCache, done chan<- *serviceC
 		sc.services, sc.err = sc.load()
 		t1 := time.Now()
 
-		rtt := t0.Sub(t1)
+		rtt := t1.Sub(t0)
 		ttl := sc.ttl.Round(time.Second)
 
 		if sc.err != nil {
