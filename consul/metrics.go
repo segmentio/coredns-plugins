@@ -1,6 +1,7 @@
 package consul
 
 import (
+	"log"
 	"sync"
 
 	"github.com/coredns/coredns/core/dnsserver"
@@ -81,11 +82,13 @@ func initializeMetrics() {
 
 func registerMetrics(c *caddy.Controller) error {
 	once.Do(func() {
-		m := dnsserver.GetConfig(c).Handler("prometheus")
-		if m == nil {
-			return
-		}
-		if r, ok := m.(*metrics.Metrics); ok {
+		initializeMetrics()
+
+		if m := dnsserver.GetConfig(c).Handler("prometheus"); m == nil {
+			log.Print("[WARN] metrics are disabled, do not use this configuration in production!")
+		} else if r, ok := m.(*metrics.Metrics); !ok {
+			log.Printf("[WARN] the registered metrics plugin is of an unexpected %T type", m)
+		} else {
 			r.MustRegister(cacheSize)
 			r.MustRegister(cacheServices)
 			r.MustRegister(cacheHits)
