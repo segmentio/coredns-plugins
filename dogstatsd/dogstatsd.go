@@ -32,6 +32,7 @@ import (
 	"github.com/coredns/coredns/plugin"
 	"github.com/miekg/dns"
 	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 )
 
 // Dogstatsd is the implementation of the dogstasd coredns plugin.
@@ -57,10 +58,14 @@ type Dogstatsd struct {
 	EnableGoMetrics      bool
 	EnableProcessMetrics bool
 
+	// ZoneNames is the list of zones that this plugin reports metrics for.
+	ZoneNames []string
+
 	once   sync.Once
 	wg     sync.WaitGroup
 	ctx    context.Context
 	cancel context.CancelFunc
+	zones  map[string]struct{}
 
 	// Generates a random float64 value between min and max. It's made
 	// configurable so it can be mocked during tests.
@@ -107,6 +112,11 @@ func (d *Dogstatsd) Stop() {
 
 func (d *Dogstatsd) init() {
 	d.ctx, d.cancel = context.WithCancel(context.Background())
+	d.zones = make(map[string]struct{}, len(d.ZoneNames))
+
+	for _, zone := range d.ZoneNames {
+		d.zones[zone] = struct{}{}
+	}
 }
 
 func (d *Dogstatsd) run(ctx context.Context) {
@@ -155,21 +165,47 @@ func (d *Dogstatsd) collect(state state) ([]metric, error) {
 	}
 
 	for _, f := range metricFamilies {
+		if !d.EnableGoMetrics && isGoMetric(*f.Name) {
+			continue
+		}
+
+		if !d.EnableProcessMetrics && isProcessMetric(*f.Name) {
+			continue
+		}
+
 		for _, m := range f.Metric {
+			if !d.matchZones(m) {
+				continue
+			}
+
 			for _, v := range makeMetrics(f, m, rand) {
-				switch {
-				case !d.EnableGoMetrics && isGoMetric(v):
-				case !d.EnableProcessMetrics && isProcessMetric(v):
-				default:
-					if v, ok := state.observe(v); ok {
-						metrics = append(metrics, v)
-					}
+				if v, ok := state.observe(v); ok {
+					metrics = append(metrics, v)
 				}
 			}
 		}
 	}
 
 	return metrics, nil
+}
+
+func (d *Dogstatsd) matchZones(m *dto.Metric) bool {
+	hasZone := false
+
+	if len(d.ZoneNames) == 0 {
+		return true // no zones configured, match all
+	}
+
+	for _, label := range m.Label {
+		if *label.Name == "zone" {
+			hasZone = true
+			if _, match := d.zones[*label.Value]; match {
+				return true
+			}
+		}
+	}
+
+	return !hasZone // no zones on the metric? OK
 }
 
 func (d *Dogstatsd) flush(metrics []metric) error {

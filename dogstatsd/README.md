@@ -34,6 +34,8 @@ If you want more control:
 dogstatsd [ADDR:PORT] {
     buffer SIZE
     flush INTERVAL
+    go
+    process
 }
 ~~~
 
@@ -42,6 +44,8 @@ dogstatsd agent. This must not exceed the size of the receive buffer used by the
 agent. The minimum size is 512 B, the maximum is 64 KB.
 * **flush** configures the time interval between flushes of metrics to a
 dogstatsd agent. The minimum interval is 1 second, there is not maximum.
+* **go** enables reporting of go metrics to the dogstatsd agent.
+* **process** enables reporting of process metrics to the dogstatsd agent.
 
 ## Examples
 

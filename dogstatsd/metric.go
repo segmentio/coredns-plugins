@@ -286,5 +286,5 @@ const (
 	processMetricPrefix = plugin.Namespace + "_process_"
 )
 
-func isGoMetric(m metric) bool      { return strings.HasPrefix(m.name, goMetricPrefix) }
-func isProcessMetric(m metric) bool { return strings.HasPrefix(m.name, processMetricPrefix) }
+func isGoMetric(name string) bool      { return strings.HasPrefix(name, goMetricPrefix) }
+func isProcessMetric(name string) bool { return strings.HasPrefix(name, processMetricPrefix) }
