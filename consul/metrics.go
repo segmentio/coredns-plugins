@@ -102,8 +102,6 @@ func initializeMetrics() {
 
 func registerMetrics(c *caddy.Controller) error {
 	once.Do(func() {
-		initializeMetrics()
-
 		if m := dnsserver.GetConfig(c).Handler("prometheus"); m == nil {
 			log.Print("[WARN] metrics are disabled, do not use this configuration in production!")
 		} else if r, ok := m.(*metrics.Metrics); !ok {
