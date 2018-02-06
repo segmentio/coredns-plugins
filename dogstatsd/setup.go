@@ -26,16 +26,16 @@ func setup(c *caddy.Controller) error {
 	}
 
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
-		m, _ := dnsserver.GetConfig(c).Handler("prometheus").(*metrics.Metrics)
-		if m == nil {
-			return errors.New("the dogstatsd plugin requires the prometheus plugin to be loaded, add 'prometheus' to the zone configuration block where 'dogstatsd' is declared")
-		}
-		d.Reg = m.Reg
 		d.Next = next
 		return d
 	})
 
 	c.OnStartup(func() error {
+		m, _ := dnsserver.GetConfig(c).Handler("prometheus").(*metrics.Metrics)
+		if m == nil {
+			return errors.New("the dogstatsd plugin requires the prometheus plugin to be loaded, add 'prometheus' to the zone configuration block where 'dogstatsd' is declared")
+		}
+		d.Reg = m.Reg
 		d.Start()
 		return nil
 	})
