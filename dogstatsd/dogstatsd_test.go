@@ -54,11 +54,15 @@ func init() {
 }
 
 func TestDogstatsd(t *testing.T) {
-	server := dogstatsdServer()
+	server, plugin, state := setupTest()
 	defer server.Close()
 
-	plugin := dogstastdPlugin(server.addr())
-	state := make(state)
+	plugin.Reg.MustRegister(
+		counter1,
+		counter2,
+		gauge1,
+		histogram1,
+	)
 
 	for i := 0; i != 10; i++ {
 		t.Logf("#%d: simple/repeat/merge", i)
@@ -193,17 +197,49 @@ func testDogstatsdMerge(t *testing.T, plugin *Dogstatsd, server server, state st
 	)
 }
 
+func TestDogstatsdGoMetrics(t *testing.T) {
+	t.Run("enabled", func(t *testing.T) { testDogstatsdGoMetrics(t, true) })
+	t.Run("disabled", func(t *testing.T) { testDogstatsdGoMetrics(t, false) })
+}
+
+func testDogstatsdGoMetrics(t *testing.T, enable bool) {
+	server, plugin, state := setupTest()
+
+	plugin.Reg.MustRegister(prometheus.NewGoCollector())
+	plugin.EnableGoMetrics = enable
+
+	plugin.pulse(state)
+	time.Sleep(100 * time.Millisecond)
+	server.Close()
+
+	count := 0
+
+	for packet := range server.packets {
+		if !enable {
+			t.Error("no go metrics must be produced when they are disabled, got", string(packet))
+		} else if !strings.HasPrefix(string(packet), "coredns.go.") {
+			t.Error("go metrics were enabled and an unexpected metric was received:", string(packet))
+		}
+		count++
+	}
+
+	if enable && count == 0 {
+		t.Error("go metrics were enabled but none have been produced")
+	}
+}
+
+func setupTest() (server, *Dogstatsd, state) {
+	server := dogstatsdServer()
+	plugin := dogstastdPlugin(server.addr())
+	state := make(state)
+	return server, plugin, state
+}
+
 func dogstastdPlugin(addr string) *Dogstatsd {
 	plugin := New()
 	plugin.Addr = addr
 	plugin.BufferSize = 100 // for the purpose of the test, forbidden otherwise
 	plugin.Reg = prometheus.NewRegistry()
-	plugin.Reg.MustRegister(
-		counter1,
-		counter2,
-		gauge1,
-		histogram1,
-	)
 	plugin.randFloat64 = func(min, max float64) float64 { return min }
 	return plugin
 }
