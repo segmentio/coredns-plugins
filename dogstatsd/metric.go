@@ -172,7 +172,7 @@ func appendTagValue(b []byte, s string) []byte {
 		case isAlphaUpper(c):
 			c = toLower(c)
 			fallthrough
-		case isValidNameRune(c):
+		case isValidTagRune(c):
 			b = append(b, byte(c))
 		default:
 			b = append(b, '_')

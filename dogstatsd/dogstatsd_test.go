@@ -34,9 +34,9 @@ var (
 		Name:      "gauge1",
 		Help:      "Test gauge 1.",
 		ConstLabels: prometheus.Labels{
-			"A": "1",
-			"B": "2",
-			"C": "3",
+			"A": "hello-1",
+			"B": "hello-2",
+			"C": "hello-3",
 		},
 	})
 
@@ -94,7 +94,7 @@ func testDogstatsdSimple(t *testing.T, plugin *Dogstatsd, server server, state s
 	assertRead(t, server,
 		"coredns.segment.counter1:42|c",
 		"coredns.segment.counter2:1|c",
-		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+		"coredns.segment.gauge1:10|g|#a:hello-1,b:hello-2,c:hello-3",
 		"coredns.segment.histogram1:0|h",
 		"coredns.segment.histogram1:40|h|@0.5",
 	)
@@ -109,64 +109,64 @@ func testDogstatsdRepeat(t *testing.T, plugin *Dogstatsd, server server, state s
 	}
 
 	assertRead(t, server,
-		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+		"coredns.segment.gauge1:10|g|#a:hello-1,b:hello-2,c:hello-3",
 
 		"coredns.segment.counter2:1|c",
-		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+		"coredns.segment.gauge1:10|g|#a:hello-1,b:hello-2,c:hello-3",
 
 		"coredns.segment.counter2:2|c",
-		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+		"coredns.segment.gauge1:10|g|#a:hello-1,b:hello-2,c:hello-3",
 
 		"coredns.segment.counter2:3|c",
-		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+		"coredns.segment.gauge1:10|g|#a:hello-1,b:hello-2,c:hello-3",
 
 		"coredns.segment.counter2:4|c",
-		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+		"coredns.segment.gauge1:10|g|#a:hello-1,b:hello-2,c:hello-3",
 
 		"coredns.segment.counter2:5|c",
-		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+		"coredns.segment.gauge1:10|g|#a:hello-1,b:hello-2,c:hello-3",
 
 		"coredns.segment.counter2:6|c",
-		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+		"coredns.segment.gauge1:10|g|#a:hello-1,b:hello-2,c:hello-3",
 
 		"coredns.segment.counter2:7|c",
-		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+		"coredns.segment.gauge1:10|g|#a:hello-1,b:hello-2,c:hello-3",
 
 		"coredns.segment.counter2:8|c",
-		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+		"coredns.segment.gauge1:10|g|#a:hello-1,b:hello-2,c:hello-3",
 
 		"coredns.segment.counter2:9|c",
-		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+		"coredns.segment.gauge1:10|g|#a:hello-1,b:hello-2,c:hello-3",
 
 		"coredns.segment.counter2:10|c",
-		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+		"coredns.segment.gauge1:10|g|#a:hello-1,b:hello-2,c:hello-3",
 
 		"coredns.segment.counter2:11|c",
-		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+		"coredns.segment.gauge1:10|g|#a:hello-1,b:hello-2,c:hello-3",
 
 		"coredns.segment.counter2:12|c",
-		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+		"coredns.segment.gauge1:10|g|#a:hello-1,b:hello-2,c:hello-3",
 
 		"coredns.segment.counter2:13|c",
-		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+		"coredns.segment.gauge1:10|g|#a:hello-1,b:hello-2,c:hello-3",
 
 		"coredns.segment.counter2:14|c",
-		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+		"coredns.segment.gauge1:10|g|#a:hello-1,b:hello-2,c:hello-3",
 
 		"coredns.segment.counter2:15|c",
-		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+		"coredns.segment.gauge1:10|g|#a:hello-1,b:hello-2,c:hello-3",
 
 		"coredns.segment.counter2:16|c",
-		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+		"coredns.segment.gauge1:10|g|#a:hello-1,b:hello-2,c:hello-3",
 
 		"coredns.segment.counter2:17|c",
-		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+		"coredns.segment.gauge1:10|g|#a:hello-1,b:hello-2,c:hello-3",
 
 		"coredns.segment.counter2:18|c",
-		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+		"coredns.segment.gauge1:10|g|#a:hello-1,b:hello-2,c:hello-3",
 
 		"coredns.segment.counter2:19|c",
-		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+		"coredns.segment.gauge1:10|g|#a:hello-1,b:hello-2,c:hello-3",
 	)
 }
 
@@ -189,7 +189,7 @@ func testDogstatsdMerge(t *testing.T, plugin *Dogstatsd, server server, state st
 		"coredns.segment.histogram1:70|h|@0.1",
 		"coredns.segment.histogram1:80|h|@0.1",
 		"coredns.segment.histogram1:90|h|@0.1",
-		"coredns.segment.gauge1:10|g|#a:1,b:2,c:3",
+		"coredns.segment.gauge1:10|g|#a:hello-1,b:hello-2,c:hello-3",
 	)
 }
 
