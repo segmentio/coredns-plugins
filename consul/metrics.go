@@ -3,6 +3,7 @@ package consul
 import (
 	"log"
 	"sync"
+	"time"
 
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
@@ -48,6 +49,13 @@ var (
 		Help:      "The count of cache misses.",
 	})
 
+	cacheEvictions = prometheus.NewCounter(prometheus.CounterOpts{
+		Namespace: plugin.Namespace,
+		Subsystem: consulSubsystem,
+		Name:      "evictions_total",
+		Help:      "The count of cache evictions.",
+	})
+
 	cachePrefetches = prometheus.NewCounter(prometheus.CounterOpts{
 		Namespace: plugin.Namespace,
 		Subsystem: consulSubsystem,
@@ -62,6 +70,14 @@ var (
 		Help:      "The distribution of response sizes to Consul requests.",
 		Buckets:   []float64{1, 5, 10, 20, 50, 100, 500, 1000, 2000, 5000, 10000},
 	})
+
+	cacheFetchDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: plugin.Namespace,
+		Subsystem: consulSubsystem,
+		Name:      "fetch_duration_seconds",
+		Help:      "The distribution of response time to Consul requests.",
+		Buckets:   []float64{0.01, 0.05, 0.1, 0.5, 1, 5, 10, 30, 60},
+	})
 )
 
 func cacheSizeAddSuccess(n int)    { cacheSize.WithLabelValues(success).Add(float64(n)) }
@@ -70,8 +86,12 @@ func cacheServicesAdd(n int)       { cacheServices.Add(float64(n)) }
 func cacheHitsIncSuccess()         { cacheHits.WithLabelValues(success).Inc() }
 func cacheHitsIncDenial()          { cacheHits.WithLabelValues(denial).Inc() }
 func cacheMissesInc()              { cacheMisses.Inc() }
+func cacheEvictionsInc()           { cacheEvictions.Inc() }
 func cachePrefetchesInc()          { cachePrefetches.Inc() }
 func cacheFetchSizesObserve(n int) { cacheFetchSizes.Observe(float64(n)) }
+func cacheFetchDurationsObserve(d time.Duration) {
+	cacheFetchDurations.Observe(float64(d) / float64(time.Second))
+}
 
 func initializeMetrics() {
 	cacheSize.WithLabelValues(success)
