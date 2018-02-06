@@ -1,6 +1,7 @@
 package dogstatsd
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -28,13 +29,7 @@ func setup(c *caddy.Controller) error {
 	m, _ := conf.Handler("prometheus").(*metrics.Metrics)
 
 	if m == nil {
-		// The dogstatsd plugin needs the prometheus plugin to be loaded in
-		// order to function, if it wasn't yet we force the load here.
-		m = metrics.New("")
-		conf.AddPlugin(func(next plugin.Handler) plugin.Handler {
-			m.Next = next
-			return m
-		})
+		return errors.New("the dogstatsd plugin requires the prometheus plugin to be loaded, add 'prometheus' to the zone configuration block where 'dogstatsd' is declared")
 	}
 
 	d.Reg = m.Reg
