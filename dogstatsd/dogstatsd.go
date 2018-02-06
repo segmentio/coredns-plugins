@@ -121,7 +121,7 @@ func (d *Dogstatsd) init() {
 
 func (d *Dogstatsd) run(ctx context.Context) {
 	defer d.wg.Done()
-	log.Printf("[INFO] dogstatsd %s { buffer %d; flush %s }", d.Addr, d.BufferSize, d.FlushInterval)
+	log.Printf("[INFO] dogstatsd %s { buffer %d; flush %s; go %t; process %t; zones %s }", d.Addr, d.BufferSize, d.FlushInterval, d.EnableGoMetrics, d.EnableProcessMetrics, d.ZoneNames)
 
 	ticker := time.NewTicker(d.FlushInterval)
 	defer ticker.Stop()
