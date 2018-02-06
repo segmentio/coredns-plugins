@@ -9,10 +9,12 @@ import (
 
 func TestSetupSuccess(t *testing.T) {
 	tests := []struct {
-		input         string
-		addr          string
-		bufferSize    int
-		flushInterval time.Duration
+		input                string
+		addr                 string
+		bufferSize           int
+		flushInterval        time.Duration
+		enableGoMetrics      bool
+		enableProcessMetrics bool
 	}{
 		{
 			input:         `dogstatsd`,
@@ -62,6 +64,26 @@ func TestSetupSuccess(t *testing.T) {
 			bufferSize:    8192,
 			flushInterval: 10 * time.Second,
 		},
+
+		{
+			input: `dogstatsd {
+				go
+			}`,
+			addr:            defaultAddr,
+			bufferSize:      defaultBufferSize,
+			flushInterval:   defaultFlushInterval,
+			enableGoMetrics: true,
+		},
+
+		{
+			input: `dogstatsd {
+				process
+			}`,
+			addr:                 defaultAddr,
+			bufferSize:           defaultBufferSize,
+			flushInterval:        defaultFlushInterval,
+			enableProcessMetrics: true,
+		},
 	}
 
 	for _, test := range tests {
@@ -86,6 +108,14 @@ func TestSetupSuccess(t *testing.T) {
 
 			if d.FlushInterval != test.flushInterval {
 				t.Errorf("Expected flush interval to be %v but found: %v", test.flushInterval, d.FlushInterval)
+			}
+
+			if d.EnableGoMetrics != test.enableGoMetrics {
+				t.Error("Expected go metrics to be %t but found: %t", test.enableGoMetrics, d.EnableGoMetrics)
+			}
+
+			if d.EnableProcessMetrics != test.enableProcessMetrics {
+				t.Error("Expected process metrics to be %t but found: %t", test.enableProcessMetrics, d.EnableProcessMetrics)
 			}
 		})
 	}
@@ -124,6 +154,12 @@ func TestSetupFailure(t *testing.T) {
 		}`,
 		`dogstatsd { # invalid plugin configuration entry
 			whatever
+		}`,
+		`dogstats { # too may arguments to 'go'
+			go hello
+		}`,
+		`dogstats { # too may arguments to 'process'
+			process hello
 		}`,
 	}
 
