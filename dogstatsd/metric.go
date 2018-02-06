@@ -2,7 +2,9 @@ package dogstatsd
 
 import (
 	"strconv"
+	"strings"
 
+	"github.com/coredns/coredns/plugin"
 	dto "github.com/prometheus/client_model/go"
 )
 
@@ -35,13 +37,14 @@ type metric struct {
 }
 
 func makeMetrics(f *dto.MetricFamily, m *dto.Metric, rand func(min, max float64) float64) []metric {
+	name := makeName(*f.Name)
 	tags := makeTags(m)
 
 	switch *f.Type {
 	case dto.MetricType_COUNTER:
 		return []metric{{
 			kind:  counter,
-			name:  *f.Name,
+			name:  name,
 			value: *m.Counter.Value,
 			tags:  tags,
 		}}
@@ -49,7 +52,7 @@ func makeMetrics(f *dto.MetricFamily, m *dto.Metric, rand func(min, max float64)
 	case dto.MetricType_GAUGE:
 		return []metric{{
 			kind:  gauge,
-			name:  *f.Name,
+			name:  name,
 			value: *m.Gauge.Value,
 			tags:  tags,
 		}}
@@ -57,7 +60,6 @@ func makeMetrics(f *dto.MetricFamily, m *dto.Metric, rand func(min, max float64)
 	case dto.MetricType_HISTOGRAM:
 		buckets := m.Histogram.Bucket
 		metrics := make([]metric, 0, len(buckets))
-		name := *f.Name
 		acc := uint64(0)
 		min := 0.0
 
@@ -89,6 +91,14 @@ func makeMetrics(f *dto.MetricFamily, m *dto.Metric, rand func(min, max float64)
 		// will skip generating them.
 		return nil
 	}
+}
+
+func makeName(s string) string {
+	const prefix = plugin.Namespace + "_"
+	if !strings.HasPrefix(s, prefix) {
+		return prefix + s
+	}
+	return s
 }
 
 func appendMetric(b []byte, m metric) []byte {
