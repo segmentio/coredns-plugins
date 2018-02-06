@@ -43,11 +43,12 @@ dispatchRequests:
 			if caches[sc.key] == sc {
 				delete(caches, sc.key)
 				cacheEvictionsInc()
-				log.Printf("[INFO] %s: expired!", sc.key)
 
 				if sc.negative() {
+					log.Printf("[INFO] %s: negative cache expired", sc.key)
 					cacheSizeAddDenial(-1)
 				} else {
+					log.Printf("[INFO] %s: cache of %d services expired", sc.key, len(sc.services))
 					cacheSizeAddSuccess(-1)
 					cacheServicesAdd(-len(sc.services))
 				}
@@ -139,20 +140,30 @@ func (c *cache) spawn(key key, ready chan<- *serviceCache, done chan<- *serviceC
 		rand:               rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 
-	log.Printf("[INFO] %s: fetching", key)
+	// Add jitter to the cache, lasting at least half the configured TTL value.
+	// This is intended to prevent synchronizing cache expirations when the
+	// cache fills up at the boot of the DNS server.
+	sc.ttl /= 2
+	sc.ttl += time.Duration(sc.rand.Int63n(int64(sc.ttl)))
 
+	log.Printf("[INFO] %s: fetching", key)
 	go func() {
 		t0 := time.Now()
 		sc.services, sc.err = sc.load()
 		t1 := time.Now()
+
+		rtt := t0.Sub(t1)
+		ttl := sc.ttl.Round(time.Second)
+
 		if sc.err != nil {
-			log.Printf("[ERROR] %s: %v", key, sc.err)
+			log.Printf("[INFO] %s: fetch completed in %s: caching error for %s (%s)", key, rtt, ttl, sc.err)
 		} else {
-			log.Printf("[INFO] %s: cached %d service endpoints", key, len(sc.services))
+			log.Printf("[INFO] %s: fetch completed in %s: caching %d service endpoints for %s", key, rtt, len(sc.services), ttl)
 		}
+
 		go sc.serve(reqs, done, next)
 		ready <- sc
-		cacheFetchDurationsObserve(t1.Sub(t0))
+		cacheFetchDurationsObserve(rtt)
 	}()
 
 	return sc
@@ -371,7 +382,7 @@ func (r serviceResponse) header(name string, rrtype uint16) dns.RR_Header {
 		Name:   name,
 		Rrtype: rrtype,
 		Class:  dns.ClassINET,
-		Ttl:    uint32((r.ttl + (time.Second / 2)) / time.Second),
+		Ttl:    uint32(r.ttl.Round(time.Second)),
 	}
 }
 
