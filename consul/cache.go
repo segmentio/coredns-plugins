@@ -334,7 +334,7 @@ func (c *serviceCache) load() ([]service, error) {
 			services = append(services, service{
 				addr: ip,
 				port: endpoint.Service.Port,
-				node: dns.Fqdn(endpoint.Node.Node),
+				node: dns.Fqdn(endpoint.Node.Node + ".node." + endpoint.Node.Datacenter + ".consul"),
 			})
 		}
 	}
@@ -451,7 +451,8 @@ type consulHealthService struct {
 }
 
 type consulNode struct {
-	Node string
+	Node       string
+	Datacenter string
 }
 
 type consulService struct {
