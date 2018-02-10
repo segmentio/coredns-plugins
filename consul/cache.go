@@ -338,7 +338,8 @@ func (c *serviceCache) load() ([]service, error) {
 			})
 		}
 	}
-	for i, j := range c.rand.Perm(len(services)) {
+	for i := range services {
+		j := c.rand.Intn(len(services))
 		services[i], services[j] = services[j], services[i]
 	}
 	return services, nil
