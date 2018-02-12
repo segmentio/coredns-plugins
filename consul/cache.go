@@ -334,11 +334,12 @@ func (c *serviceCache) load() ([]service, error) {
 			services = append(services, service{
 				addr: ip,
 				port: endpoint.Service.Port,
-				node: dns.Fqdn(endpoint.Node.Node),
+				node: dns.Fqdn(endpoint.Node.Node + ".node." + endpoint.Node.Datacenter + ".consul"),
 			})
 		}
 	}
-	for i, j := range c.rand.Perm(len(services)) {
+	for i := range services {
+		j := c.rand.Intn(len(services))
 		services[i], services[j] = services[j], services[i]
 	}
 	return services, nil
@@ -451,7 +452,8 @@ type consulHealthService struct {
 }
 
 type consulNode struct {
-	Node string
+	Node       string
+	Datacenter string
 }
 
 type consulService struct {
