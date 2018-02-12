@@ -77,6 +77,10 @@ func (c *Consul) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 	state := request.Request{W: w, Req: r}
 	rcode, answer, extra, err := c.serveDNS(ctx, state)
 
+	if err != nil {
+		log.Printf("[ERROR] %s: %s", state.Name(), err)
+	}
+
 	a := &dns.Msg{}
 	a.SetReply(r)
 	a.Rcode = rcode
