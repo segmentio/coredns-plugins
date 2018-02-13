@@ -334,7 +334,7 @@ func (c *serviceCache) load() ([]service, error) {
 			services = append(services, service{
 				addr: ip,
 				port: endpoint.Service.Port,
-				node: dns.Fqdn(endpoint.Node.Node + ".node." + endpoint.Node.Datacenter + ".consul"),
+				node: dns.Fqdn(join(endpoint.Node.Node, "node", endpoint.Node.Datacenter, "consul")),
 			})
 		}
 	}
@@ -348,6 +348,21 @@ func (c *serviceCache) load() ([]service, error) {
 func httpError(res *http.Response) error {
 	req := res.Request
 	return fmt.Errorf("%s %s: %s", req.Method, req.URL, res.Status)
+}
+
+func join(parts ...string) string {
+	b := make([]byte, 0, 10*len(parts))
+
+	for _, s := range parts {
+		if len(s) != 0 {
+			if len(b) != 0 {
+				b = append(b, '.')
+			}
+			b = append(b, s...)
+		}
+	}
+
+	return string(b)
 }
 
 type key struct {
