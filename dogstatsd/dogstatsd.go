@@ -170,7 +170,7 @@ func (d *Dogstatsd) refreshDockerCache() {
 	containers, err := d.dockerClient.listContainers()
 
 	if err != nil {
-		log.Printf("[ERROR] failed to list containers from docker at %s", d.dockerClient.host)
+		log.Printf("[ERROR] failed to list containers from docker at %s: %s", d.dockerClient.host, err)
 		return
 	}
 
