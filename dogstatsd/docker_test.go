@@ -69,6 +69,62 @@ func TestDockerImage(t *testing.T) {
 	}
 }
 
+func TestDockerNetworkAddress(t *testing.T) {
+	tests := []struct {
+		host    string
+		network string
+		address string
+	}{
+		{
+			host:    "",
+			network: "",
+			address: "",
+		},
+
+		{
+			host:    "/var/run/docker.sock",
+			network: "unix",
+			address: "/var/run/docker.sock",
+		},
+
+		{
+			host:    "unix:///var/run/docker.sock",
+			network: "unix",
+			address: "/var/run/docker.sock",
+		},
+
+		{
+			host:    "localhost",
+			network: "tcp",
+			address: "localhost:2376",
+		},
+
+		{
+			host:    "tcp://localhost",
+			network: "tcp",
+			address: "localhost:2376",
+		},
+
+		{
+			host:    "tcp://localhost:2376",
+			network: "tcp",
+			address: "localhost:2376",
+		},
+	}
+
+	for _, test := range tests {
+		network, address := dockerNetworkAddress(test.host)
+
+		if network != test.network {
+			t.Errorf("%s: invalid network: %s != %s", test.host, network, test.network)
+		}
+
+		if address != test.address {
+			t.Errorf("%s: invalid address: %s != %s", test.host, network, test.address)
+		}
+	}
+}
+
 func TestDockerClient(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/containers/json" {
@@ -205,7 +261,7 @@ func TestDockerClient(t *testing.T) {
 	defer server.Close()
 
 	client := dockerClient{
-		host: server.URL,
+		host: server.URL[7:],
 	}
 
 	containers, err := client.listContainers()

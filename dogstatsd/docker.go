@@ -1,15 +1,17 @@
 package dogstatsd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type dockerClient struct {
 	host string
-	http http.Client
 }
 
 func (c *dockerClient) listContainers() (containers []dockerContainer, err error) {
@@ -17,20 +19,34 @@ func (c *dockerClient) listContainers() (containers []dockerContainer, err error
 	return
 }
 
-func (c *dockerClient) get(url string, ret interface{}) (err error) {
-	var host = dockerHostAddr(c.host)
+func (c *dockerClient) get(path string, ret interface{}) (err error) {
 	var req *http.Request
 	var res *http.Response
 
-	if len(host) == 0 {
+	if len(c.host) == 0 {
 		return
 	}
 
-	if req, err = http.NewRequest(http.MethodGet, host+url, nil); err != nil {
+	dialContext := func(ctx context.Context, _, _ string) (net.Conn, error) {
+		network, address := dockerNetworkAddress(c.host)
+		return (&net.Dialer{Timeout: 4 * time.Second}).DialContext(ctx, network, address)
+	}
+
+	transport := &http.Transport{
+		DialContext:            dialContext,
+		DisableKeepAlives:      true,
+		DisableCompression:     true,
+		ResponseHeaderTimeout:  5 * time.Second,
+		ExpectContinueTimeout:  5 * time.Second,
+		MaxResponseHeaderBytes: 1024 * 1024,
+	}
+	defer transport.CloseIdleConnections()
+
+	if req, err = http.NewRequest(http.MethodGet, "http://docker"+path, nil); err != nil {
 		return
 	}
 
-	if res, err = c.http.Do(req); err != nil {
+	if res, err = transport.RoundTrip(req); err != nil {
 		return
 	}
 	defer res.Body.Close()
@@ -89,13 +105,20 @@ func (image dockerImage) parts() (repo, name, version string) {
 	return
 }
 
-func dockerHostAddr(host string) string {
-	if len(host) != 0 && !strings.HasPrefix(host, "http://") {
-		i := strings.Index(host, "://")
-		if i >= 0 {
-			host = host[i+3:]
+func dockerNetworkAddress(host string) (network, address string) {
+	if len(host) != 0 {
+		if i := strings.Index(host, "://"); i >= 0 {
+			network, address = host[:i], host[i+3:]
+		} else if address = host; strings.HasPrefix(address, "/") {
+			network = "unix"
+		} else {
+			network = "tcp"
 		}
-		host = "http://" + host
+		if network == "tcp" {
+			if _, port, _ := net.SplitHostPort(address); len(port) == 0 {
+				address = net.JoinHostPort(address, "2376") // default docker port
+			}
+		}
 	}
-	return host
+	return
 }
