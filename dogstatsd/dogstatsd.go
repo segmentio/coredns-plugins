@@ -187,8 +187,8 @@ func (d *Dogstatsd) refreshDockerCache() {
 				ipAddress = network.IPAMConfig.IPv6Address
 			}
 			if len(ipAddress) != 0 {
-				cache[network.IPAddress] = append(cache[network.IPAddress], imageName)
-				log.Printf("[INFO] update docker cache: %s->%s", imageName, network.IPAddress)
+				cache[ipAddress] = append(cache[ipAddress], imageName)
+				log.Printf("[INFO] update docker cache: %s->%s", imageName, ipAddress)
 			}
 		}
 	}
