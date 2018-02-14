@@ -108,12 +108,11 @@ func (d *Dogstatsd) Name() string { return "dogstatsd" }
 
 // ServeDNS satisfies the plugin.Handler interface.
 func (d *Dogstatsd) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
-	addr := w.RemoteAddr().String()
-	addr, _, _ = net.SplitHostPort(addr)
-
 	if cache, ok := d.dockerCache.Load().(map[string][]string); ok {
-		// If we have one or more names for the address we increment the
-		// corresponding counters.
+		addr := w.RemoteAddr().String()
+		addr, _, _ = net.SplitHostPort(addr)
+		// If we have one or more client registered for the address we increment
+		// the corresponding counters.
 		for _, a := range cache[addr] {
 			d.clients.incr(a)
 			d.exchanges.incr(a + "/" + r.Question[0].Name)
