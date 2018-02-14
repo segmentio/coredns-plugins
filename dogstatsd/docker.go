@@ -70,7 +70,13 @@ type dockerNetworkSettings struct {
 }
 
 type dockerNetwork struct {
-	IPAddress string
+	IPAMConfig dockerIPAMConfig
+	IPAddress  string
+}
+
+type dockerIPAMConfig struct {
+	IPv4Address string
+	IPv6Address string
 }
 
 type dockerImage string

@@ -179,8 +179,17 @@ func (d *Dogstatsd) refreshDockerCache() {
 	for _, container := range containers {
 		for _, network := range container.NetworkSettings.Networks {
 			imageName := container.Image.name()
-			cache[network.IPAddress] = append(cache[network.IPAddress], imageName)
-			log.Printf("[INFO] caching docker image address: %s->%s", imageName, network.IPAddress)
+			ipAddress := network.IPAddress
+			if len(ipAddress) == 0 {
+				ipAddress = network.IPAMConfig.IPv4Address
+			}
+			if len(ipAddress) == 0 {
+				ipAddress = network.IPAMConfig.IPv6Address
+			}
+			if len(ipAddress) != 0 {
+				cache[network.IPAddress] = append(cache[network.IPAddress], imageName)
+				log.Printf("[INFO] update docker cache: %s->%s", imageName, network.IPAddress)
+			}
 		}
 	}
 
