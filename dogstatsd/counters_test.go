@@ -5,31 +5,31 @@ import (
 	"testing"
 )
 
-func TestNameCounters(t *testing.T) {
-	nc := makeNameCounters()
+func TestCounterStore(t *testing.T) {
+	c := makeCounterStore()
 
 	for i := 0; i != 10; i++ {
-		nc.incr("www.segment.com.")
+		c.incr("www.segment.com.")
 	}
 
 	for i := 0; i != 4; i++ {
-		nc.incr("www.github.com.")
+		c.incr("www.github.com.")
 	}
 
 	for i := 0; i != 3; i++ {
-		nc.incr("www.google.com.")
+		c.incr("www.google.com.")
 	}
 
-	nc.incr("google.com.")
-	nc.incr("facebook.com.")
-	nc.incr("datadoghq.com.")
+	c.incr("google.com.")
+	c.incr("facebook.com.")
+	c.incr("datadoghq.com.")
 
-	top3 := nc.top(3)
+	top3 := c.top(3)
 
-	if !reflect.DeepEqual(top3, []nameCounter{
-		{name: "www.segment.com.", count: 10},
-		{name: "www.github.com.", count: 4},
-		{name: "www.google.com.", count: 3},
+	if !reflect.DeepEqual(top3, []counterEntry{
+		{key: "www.segment.com.", value: 10},
+		{key: "www.github.com.", value: 4},
+		{key: "www.google.com.", value: 3},
 	}) {
 		t.Error("top counters mismatch:", top3)
 	}
