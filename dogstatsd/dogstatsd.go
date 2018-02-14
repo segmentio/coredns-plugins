@@ -26,6 +26,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -67,6 +68,13 @@ type Dogstatsd struct {
 	cancel context.CancelFunc
 	zones  map[string]struct{}
 
+	dockerClient dockerClient
+	dockerCache  atomic.Value
+
+	clients   counterStore
+	names     counterStore
+	exchanges counterStore
+
 	// Generates a random float64 value between min and max. It's made
 	// configurable so it can be mocked during tests.
 	randFloat64 func(min, max float64) float64
@@ -84,6 +92,14 @@ func New() *Dogstatsd {
 		Addr:          defaultAddr,
 		BufferSize:    defaultBufferSize,
 		FlushInterval: defaultFlushInterval,
+
+		dockerClient: dockerClient{
+			host: os.Getenv("DOCKER_HOST"),
+		},
+
+		clients:   makeCounterStore(),
+		names:     makeCounterStore(),
+		exchanges: makeCounterStore(),
 	}
 }
 
@@ -92,6 +108,18 @@ func (d *Dogstatsd) Name() string { return "dogstatsd" }
 
 // ServeDNS satisfies the plugin.Handler interface.
 func (d *Dogstatsd) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+	if cache, ok := d.dockerCache.Load().(map[string][]string); ok {
+		addr := w.RemoteAddr().String()
+		addr, _, _ = net.SplitHostPort(addr)
+		// If we have one or more client registered for the address we increment
+		// the corresponding counters.
+		for _, a := range cache[addr] {
+			d.clients.incr(a)
+			d.exchanges.incr(a + "/" + r.Question[0].Name)
+		}
+	}
+
+	d.names.incr(r.Question[0].Name)
 	return plugin.NextOrFailure(d.Name(), d.Next, ctx, w, r)
 }
 
@@ -128,17 +156,48 @@ func (d *Dogstatsd) run(ctx context.Context) {
 
 	state := make(state)
 	for {
+		d.refreshDockerCache()
+		d.reportMetrics(state)
 		select {
+		case <-ticker.C:
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
-			d.pulse(state)
 		}
 	}
 }
 
-func (d *Dogstatsd) pulse(state state) {
-	metrics, err := d.collect(state)
+func (d *Dogstatsd) refreshDockerCache() {
+	containers, err := d.dockerClient.listContainers()
+
+	if err != nil {
+		log.Printf("[ERROR] failed to list containers from docker at %s: %s", d.dockerClient.host, err)
+		return
+	}
+
+	cache := map[string][]string{}
+
+	for _, container := range containers {
+		for _, network := range container.NetworkSettings.Networks {
+			imageName := container.Image.name()
+			ipAddress := network.IPAddress
+			if len(ipAddress) == 0 {
+				ipAddress = network.IPAMConfig.IPv4Address
+			}
+			if len(ipAddress) == 0 {
+				ipAddress = network.IPAMConfig.IPv6Address
+			}
+			if len(ipAddress) != 0 {
+				cache[ipAddress] = append(cache[ipAddress], imageName)
+				log.Printf("[INFO] update docker cache: %s->%s", imageName, ipAddress)
+			}
+		}
+	}
+
+	d.dockerCache.Store(cache)
+}
+
+func (d *Dogstatsd) reportMetrics(state state) {
+	metrics, err := d.collectMetrics(state)
 
 	if err != nil {
 		log.Printf("[ERROR] collecting metrics: %s", err)
@@ -147,12 +206,12 @@ func (d *Dogstatsd) pulse(state state) {
 
 	log.Printf("[INFO] flushing %d metrics to %s", len(metrics), d.Addr)
 
-	if err := d.flush(metrics); err != nil {
+	if err := d.flushMetrics(metrics); err != nil {
 		log.Printf("[ERROR] flushing metrics to the dogstatsd agent at %s: %s", d.Addr, err)
 	}
 }
 
-func (d *Dogstatsd) collect(state state) ([]metric, error) {
+func (d *Dogstatsd) collectMetrics(state state) ([]metric, error) {
 	metricFamilies, err := d.Reg.Gather()
 	if err != nil {
 		return nil, err
@@ -186,6 +245,18 @@ func (d *Dogstatsd) collect(state state) ([]metric, error) {
 		}
 	}
 
+	for _, c := range d.clients.top(10) {
+		metrics = append(metrics, c.metric("coredns.dns.clients.top10", "client"))
+	}
+
+	for _, c := range d.names.top(10) {
+		metrics = append(metrics, c.metric("coredns.dns.names.top10", "name"))
+	}
+
+	for _, c := range d.exchanges.top(10) {
+		metrics = append(metrics, c.metric("coredns.dns.exchanges.top10", "exchange"))
+	}
+
 	return metrics, nil
 }
 
@@ -208,7 +279,7 @@ func (d *Dogstatsd) matchZones(m *dto.Metric) bool {
 	return !hasZone // no zones on the metric? OK
 }
 
-func (d *Dogstatsd) flush(metrics []metric) error {
+func (d *Dogstatsd) flushMetrics(metrics []metric) error {
 	conn, bufferSize, err := dial(d.Addr, d.BufferSize)
 	if err != nil {
 		return err

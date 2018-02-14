@@ -94,7 +94,7 @@ func testDogstatsdSimple(t *testing.T, plugin *Dogstatsd, server server, state s
 	histogram1.Observe(42)
 	histogram1.Observe(42)
 
-	plugin.pulse(state)
+	plugin.reportMetrics(state)
 	assertRead(t, server,
 		"coredns.segment.counter1:42|c",
 		"coredns.segment.counter2:1|c",
@@ -109,7 +109,7 @@ func testDogstatsdRepeat(t *testing.T, plugin *Dogstatsd, server server, state s
 
 	for i := 0; i != 20; i++ {
 		counter2.Add(float64(i))
-		plugin.pulse(state)
+		plugin.reportMetrics(state)
 	}
 
 	assertRead(t, server,
@@ -181,7 +181,7 @@ func testDogstatsdMerge(t *testing.T, plugin *Dogstatsd, server server, state st
 		histogram1.Observe(float64(i + 1))
 	}
 
-	plugin.pulse(state)
+	plugin.reportMetrics(state)
 	assertRead(t, server,
 		"coredns.segment.histogram1:0|h|@0.1",
 		"coredns.segment.histogram1:10|h|@0.1",
@@ -208,7 +208,7 @@ func testDogstatsdGoMetrics(t *testing.T, enable bool) {
 	plugin.Reg.MustRegister(prometheus.NewGoCollector())
 	plugin.EnableGoMetrics = enable
 
-	plugin.pulse(state)
+	plugin.reportMetrics(state)
 	time.Sleep(100 * time.Millisecond)
 	server.Close()
 
