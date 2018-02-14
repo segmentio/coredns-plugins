@@ -156,12 +156,12 @@ func (d *Dogstatsd) run(ctx context.Context) {
 
 	state := make(state)
 	for {
+		d.refreshDockerCache()
+		d.reportMetrics(state)
 		select {
+		case <-ticker.C:
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
-			d.refreshDockerCache()
-			d.reportMetrics(state)
 		}
 	}
 }
