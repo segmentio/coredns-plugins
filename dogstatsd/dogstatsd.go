@@ -67,6 +67,10 @@ type Dogstatsd struct {
 	cancel context.CancelFunc
 	zones  map[string]struct{}
 
+	// nameCounters is used by the plugin to track and report the top N most
+	// popular names queried.
+	nameCounters nameCounters
+
 	// Generates a random float64 value between min and max. It's made
 	// configurable so it can be mocked during tests.
 	randFloat64 func(min, max float64) float64
@@ -84,6 +88,7 @@ func New() *Dogstatsd {
 		Addr:          defaultAddr,
 		BufferSize:    defaultBufferSize,
 		FlushInterval: defaultFlushInterval,
+		nameCounters:  makeNameCounters(),
 	}
 }
 
@@ -92,6 +97,9 @@ func (d *Dogstatsd) Name() string { return "dogstatsd" }
 
 // ServeDNS satisfies the plugin.Handler interface.
 func (d *Dogstatsd) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+	for _, q := range r.Question {
+		d.nameCounters.incr(q.Name)
+	}
 	return plugin.NextOrFailure(d.Name(), d.Next, ctx, w, r)
 }
 
@@ -184,6 +192,15 @@ func (d *Dogstatsd) collect(state state) ([]metric, error) {
 				}
 			}
 		}
+	}
+
+	for _, c := range d.nameCounters.top(10) {
+		metrics = append(metrics, metric{
+			kind:  counter,
+			name:  "coredns.dns.request.count.top10",
+			value: float64(c.count),
+			tags:  tags("name:" + c.name),
+		})
 	}
 
 	return metrics, nil
