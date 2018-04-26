@@ -111,11 +111,11 @@ func TestSetupSuccess(t *testing.T) {
 			}
 
 			if d.EnableGoMetrics != test.enableGoMetrics {
-				t.Error("Expected go metrics to be %t but found: %t", test.enableGoMetrics, d.EnableGoMetrics)
+				t.Errorf("Expected go metrics to be %t but found: %t", test.enableGoMetrics, d.EnableGoMetrics)
 			}
 
 			if d.EnableProcessMetrics != test.enableProcessMetrics {
-				t.Error("Expected process metrics to be %t but found: %t", test.enableProcessMetrics, d.EnableProcessMetrics)
+				t.Errorf("Expected process metrics to be %t but found: %t", test.enableProcessMetrics, d.EnableProcessMetrics)
 			}
 		})
 	}
