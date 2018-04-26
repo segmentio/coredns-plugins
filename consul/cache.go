@@ -5,294 +5,128 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/miekg/dns"
 )
 
 type cache struct {
-	reqs               chan<- serviceRequest
-	addr               string
-	ttl                time.Duration
-	maxRequests        int
-	prefetchAmount     int
-	prefetchPercentage int
-	prefetchDuration   time.Duration
-	transport          http.RoundTripper
-}
-
-func (c *cache) close() { close(c.reqs) }
-
-func (c *cache) serve(reqs <-chan serviceRequest) {
-	prefetches := make(map[key]*serviceCache)
-	caches := make(map[key]*serviceCache)
-
-	ready := make(chan *serviceCache, c.maxRequests)
-	done := make(chan *serviceCache, c.maxRequests)
-	next := make(chan key, c.maxRequests)
-
-dispatchRequests:
-	for {
-		select {
-		case sc := <-done:
-			if caches[sc.key] == sc {
-				delete(caches, sc.key)
-
-				m := sc.key.metrics()
-				m.cacheEvictionsInc()
-
-				if sc.negative() {
-					log.Printf("[INFO] %s: negative cache expired", sc.key)
-					m.cacheSizeAddDenial(-1)
-				} else {
-					log.Printf("[INFO] %s: cache of %d services expired", sc.key, len(sc.services))
-					m.cacheSizeAddSuccess(-1)
-					m.cacheServicesAdd(-len(sc.services))
-				}
-			}
-
-		case key := <-next:
-			if _, alreadyPrefetching := prefetches[key]; !alreadyPrefetching {
-				prefetches[key] = c.spawn(key, ready, done, next)
-				m := key.metrics()
-				m.cachePrefetchesInc()
-			}
-
-		case sc := <-ready:
-			if prefetches[sc.key] != sc {
-				sc.close()
-			} else {
-				delete(prefetches, sc.key)
-				expired := caches[sc.key]
-				caches[sc.key] = sc
-				m := sc.key.metrics()
-
-				if expired != nil {
-					if expired.negative() {
-						m.cacheSizeAddDenial(-1)
-					} else {
-						m.cacheSizeAddSuccess(-1)
-						m.cacheServicesAdd(-len(expired.services))
-					}
-					expired.close()
-				}
-
-				if sc.negative() {
-					m.cacheSizeAddDenial(1)
-				} else {
-					m.cacheSizeAddSuccess(1)
-					m.cacheServicesAdd(len(sc.services))
-					m.cacheFetchSizesObserve(len(sc.services))
-				}
-			}
-
-		case r, ok := <-reqs:
-			if !ok {
-				break dispatchRequests
-			}
-
-			sc, hit := caches[r.key]
-			if !hit {
-				sc, hit = prefetches[r.key]
-				if !hit {
-					sc = c.spawn(r.key, ready, done, next)
-					prefetches[r.key] = sc
-					m := r.key.metrics()
-					m.cacheMissesInc()
-				}
-			}
-
-			select {
-			case sc.reqs <- r:
-			default:
-				r.reject(errTooManyRequests)
-			}
-		}
-	}
-
-	for _, sc := range prefetches {
-		sc.close()
-	}
-
-	for _, sc := range caches {
-		sc.close()
-	}
-
-	for len(caches) != 0 || len(prefetches) != 0 {
-		select {
-		case <-next:
-			// ignore
-
-		case sc := <-done:
-			if caches[sc.key] == sc {
-				delete(caches, sc.key)
-			}
-
-		case sc := <-ready:
-			if prefetches[sc.key] == sc {
-				delete(prefetches, sc.key)
-			}
-		}
-	}
-}
-
-func (c *cache) spawn(key key, ready chan<- *serviceCache, done chan<- *serviceCache, next chan<- key) *serviceCache {
-	reqs := make(chan serviceRequest, c.maxRequests)
-
-	sc := &serviceCache{
-		reqs:               reqs,
-		key:                key,
-		addr:               c.addr,
-		ttl:                c.ttl,
-		prefetchAmount:     c.prefetchAmount,
-		prefetchPercentage: c.prefetchPercentage,
-		prefetchDuration:   c.prefetchDuration,
-		transport:          c.transport,
-		rand:               rand.New(rand.NewSource(time.Now().UnixNano())),
-	}
-
-	// Add jitter to the cache, lasting at least half the configured TTL value.
-	// This is intended to prevent synchronizing cache expirations when the
-	// cache fills up at the boot of the DNS server.
-	sc.ttl /= 2
-	sc.ttl += time.Duration(sc.rand.Int63n(int64(sc.ttl)))
-
-	go func() {
-		t0 := time.Now()
-		sc.services, sc.err = sc.load()
-		t1 := time.Now()
-
-		rtt := t1.Sub(t0)
-		ttl := sc.ttl.Round(time.Second)
-
-		if sc.err != nil {
-			log.Printf("[INFO] %s: fetch completed in %s: caching error for %s (%s)", key, rtt, ttl, sc.err)
-		} else {
-			log.Printf("[INFO] %s: fetch completed in %s: caching %d service endpoints for %s", key, rtt, len(sc.services), ttl)
-		}
-
-		go sc.serve(reqs, done, next)
-		ready <- sc
-
-		m := sc.key.metrics()
-		m.cacheFetchDurationsObserve(rtt)
-	}()
-
-	return sc
-}
-
-type serviceCache struct {
-	reqs               chan<- serviceRequest
-	key                key
-	err                error
 	addr               string
 	ttl                time.Duration
 	prefetchAmount     int
 	prefetchPercentage int
 	prefetchDuration   time.Duration
 	transport          http.RoundTripper
-	rand               *rand.Rand
-	services           []service
+
+	mutex    sync.RWMutex
+	entries  map[key]*entry
+	lookups  atomicIndex
+	cleanups atomicLock
 }
 
-func (c *serviceCache) negative() bool { return c.err != nil }
+func (c *cache) prefetchDeadlineOf(e *entry) time.Time {
+	d := float64(c.prefetchDuration) * (float64(c.prefetchPercentage) / 1000)
+	return e.exp.Add(-time.Duration(d))
+}
 
-func (c *serviceCache) close() { close(c.reqs) }
+func (c *cache) lookup(ctx context.Context, k key, now time.Time) (srv service, ttl time.Duration, err error) {
+	e := c.grab(k, now)
+	i := e.index.incr() - 1
 
-func (c *serviceCache) serve(reqs <-chan serviceRequest, done chan<- *serviceCache, next chan<- key) {
-	const timeBuckets = 4
-	deadline := time.Now().Add(c.ttl)
+	// Note: the implementation of this check should be changed to take prefetchAmount
+	// into account, but it requires maintaining more state to implement it right, which
+	// is not immediately needed since consul service names looked up in production are
+	// all very popular.
+	if i == 0 || (i >= uint32(c.prefetchAmount)) && now.After(c.prefetchDeadlineOf(e)) {
+		if e.lock.tryLock() {
+			srv, err := c.load(k)
+			e.lock.unlock()
 
-	timeout := time.NewTimer(c.ttl)
-	defer timeout.Stop()
-
-	prefetchCheck := time.NewTicker(c.prefetchDuration / timeBuckets)
-	defer prefetchCheck.Stop()
-
-	prefetchTrigger := time.NewTimer(c.ttl - ((c.ttl * time.Duration(c.prefetchPercentage)) / 100))
-	defer prefetchTrigger.Stop()
-
-	met := c.key.metrics()
-	hits := 0
-	prefetch := false
-	roundRobin := 0
-
-	get := func() (srv service) {
-		if len(c.services) != 0 {
-			index := roundRobin
-			roundRobin = (roundRobin + 1) % len(c.services)
-			srv = c.services[index]
+			if e.once.tryLock() {
+				e.srv = srv
+				e.err = err
+				close(e.ready)
+			} else if err == nil {
+				c.update(k, &entry{
+					srv:   srv,
+					exp:   now.Add(c.ttl),
+					ready: e.ready, // already closed
+					index: 1,       // can't be zero to avoid refetching on next lookup
+				})
+			}
 		}
+	}
+
+	// Every 1000 lookups the cache removes expired entries.
+	if (c.lookups.incr() % 1000) == 0 {
+		if c.cleanups.tryLock() {
+			c.cleanup(now)
+			c.cleanups.unlock()
+		}
+	}
+
+	select {
+	case <-e.ready:
+	case <-ctx.Done():
+		err = ctx.Err()
 		return
 	}
 
-	ttl := func() time.Duration {
-		d := deadline.Sub(time.Now())
-		if d < 0 {
-			d = 0
-		}
-		return d
+	if n := len(e.srv); n != 0 {
+		srv = e.srv[i%uint32(n)]
 	}
 
-	respond := func(req serviceRequest) {
-		if c.err != nil {
-			req.reject(c.err)
-			met.cacheHitsIncDenial()
-		} else {
-			req.resolve(get(), ttl())
-			met.cacheHitsIncSuccess()
-		}
-	}
-
-	for {
-		select {
-		case <-timeout.C:
-			done <- c
-			for req := range reqs {
-				respond(req)
-			}
-			return
-
-		case <-prefetchCheck.C:
-			if !prefetch {
-				prefetch = hits >= c.prefetchAmount
-				hits -= (hits / timeBuckets) // assumes distribution over time
-			}
-
-		case <-prefetchTrigger.C:
-			if prefetch {
-				select {
-				case next <- c.key:
-				default:
-					// If we failed schedule the prefetch it means the channel
-					// was full and likely the program is overloaded. Just give
-					// up and leave the cache expire, it will get refetched on
-					// the next query for this service name.
-				}
-			}
-
-		case req, ok := <-reqs:
-			if !ok {
-				return
-			}
-			respond(req)
-			hits++
-		}
-	}
+	ttl = e.exp.Sub(now)
+	err = e.err
+	return
 }
 
-func (c *serviceCache) load() ([]service, error) {
-	u := c.addr + "/v1/health/service/" + url.QueryEscape(c.key.name) + "?passing"
-	if len(c.key.tag) != 0 {
-		u += "&tag=" + url.QueryEscape(c.key.tag)
+func (c *cache) grab(k key, now time.Time) (e *entry) {
+	c.mutex.RLock()
+	e = c.entries[k]
+	c.mutex.RUnlock()
+
+	if e == nil {
+		c.mutex.Lock()
+
+		if e = c.entries[k]; e == nil {
+			if c.entries == nil {
+				c.entries = make(map[key]*entry)
+			}
+
+			e = &entry{
+				exp:   now.Add(c.ttl),
+				ready: make(chan struct{}),
+			}
+
+			c.entries[k] = e
+		}
+
+		c.mutex.Unlock()
 	}
-	if len(c.key.dc) != 0 {
-		u += "&dc=" + url.QueryEscape(c.key.dc)
+
+	return e
+}
+
+func (c *cache) update(k key, e *entry) {
+	c.mutex.Lock()
+	c.entries[k] = e
+	c.mutex.Unlock()
+}
+
+func (c *cache) load(k key) ([]service, error) {
+	u := c.addr + "/v1/health/service/" + url.QueryEscape(k.name) + "?passing"
+	if len(k.tag) != 0 {
+		u += "&tag=" + url.QueryEscape(k.tag)
+	}
+	if len(k.dc) != 0 {
+		u += "&dc=" + url.QueryEscape(k.dc)
 	}
 
 	req, err := http.NewRequest("GET", u, nil)
@@ -321,7 +155,7 @@ func (c *serviceCache) load() ([]service, error) {
 	}
 
 	var isOK = isIP
-	switch c.key.qtype {
+	switch k.qtype {
 	case dns.TypeA:
 		isOK = isIPv4
 	case dns.TypeAAAA:
@@ -339,10 +173,35 @@ func (c *serviceCache) load() ([]service, error) {
 		}
 	}
 	for i := range services {
-		j := c.rand.Intn(len(services))
+		j := rand.Intn(len(services))
 		services[i], services[j] = services[j], services[i]
 	}
 	return services, nil
+}
+
+// cleanup removes all expired cache entries. The implementation optimizes for
+// creating opportunities for other goroutines to get scheduled by frequently
+// releasing and reacquiring locks on the cache mutex.
+func (c *cache) cleanup(now time.Time) {
+	c.mutex.RLock()
+
+	for k, e := range c.entries {
+		c.mutex.RUnlock()
+
+		if now.After(e.exp) {
+			c.mutex.Lock()
+			// In case the entries map was modified concurrently, we make
+			// sure that the e we've seen is still the one in the cache.
+			if c.entries[k] == e {
+				delete(c.entries, k)
+			}
+			c.mutex.Unlock()
+		}
+
+		c.mutex.RLock()
+	}
+
+	c.mutex.RUnlock()
 }
 
 func httpError(res *http.Response) error {
@@ -404,60 +263,54 @@ type service struct {
 	node string
 }
 
-type serviceRequest struct {
-	key key
-	res chan<- serviceResponse
-}
-
-func (req serviceRequest) resolve(srv service, ttl time.Duration) {
-	req.res <- serviceResponse{srv: srv, ttl: ttl}
-}
-func (req serviceRequest) reject(err error) { req.res <- serviceResponse{err: err} }
-
-type serviceResponse struct {
-	srv service
-	err error
-	ttl time.Duration
-}
-
-func (r serviceResponse) header(name string, rrtype uint16) dns.RR_Header {
+func (s service) header(name string, rrtype uint16, ttl time.Duration) dns.RR_Header {
 	return dns.RR_Header{
 		Name:   name,
 		Rrtype: rrtype,
 		Class:  dns.ClassINET,
-		Ttl:    uint32(r.ttl.Round(time.Second)),
+		Ttl:    uint32(ttl.Round(time.Second)),
 	}
 }
 
-func (r serviceResponse) A(name string) *dns.A {
+func (s service) A(name string, ttl time.Duration) *dns.A {
 	return &dns.A{
-		Hdr: r.header(name, dns.TypeA),
-		A:   r.srv.addr,
+		Hdr: s.header(name, dns.TypeA, ttl),
+		A:   s.addr,
 	}
 }
 
-func (r serviceResponse) AAAA(name string) *dns.AAAA {
+func (s service) AAAA(name string, ttl time.Duration) *dns.AAAA {
 	return &dns.AAAA{
-		Hdr:  r.header(name, dns.TypeAAAA),
-		AAAA: r.srv.addr,
+		Hdr:  s.header(name, dns.TypeAAAA, ttl),
+		AAAA: s.addr,
 	}
 }
 
-func (r serviceResponse) SRV(name string) *dns.SRV {
+func (s service) SRV(name string, ttl time.Duration) *dns.SRV {
 	return &dns.SRV{
-		Hdr:      r.header(name, dns.TypeSRV),
+		Hdr:      s.header(name, dns.TypeSRV, ttl),
 		Priority: 1,
 		Weight:   1,
-		Port:     uint16(r.srv.port),
-		Target:   r.srv.node,
+		Port:     uint16(s.port),
+		Target:   s.node,
 	}
 }
 
-func (r serviceResponse) ANY(name string) dns.RR {
-	if isIPv6(r.srv.addr) {
-		return r.AAAA(name)
+func (s service) ANY(name string, ttl time.Duration) dns.RR {
+	if isIPv6(s.addr) {
+		return s.AAAA(name, ttl)
 	}
-	return r.A(name)
+	return s.A(name, ttl)
+}
+
+type entry struct {
+	srv   []service
+	err   error
+	exp   time.Time
+	ready chan struct{}
+	index atomicIndex
+	lock  atomicLock
+	once  atomicLock
 }
 
 // https://www.consul.io/api/health.html#list-nodes-for-service
@@ -483,3 +336,19 @@ var (
 func isIP(ip net.IP) bool   { return ip != nil }
 func isIPv4(ip net.IP) bool { return ip != nil && ip.To4() != nil }
 func isIPv6(ip net.IP) bool { return ip != nil && ip.To4() == nil }
+
+type atomicIndex uint32
+
+func (index *atomicIndex) incr() uint32 {
+	return atomic.AddUint32((*uint32)(index), 1)
+}
+
+type atomicLock uint32
+
+func (lock *atomicLock) tryLock() bool {
+	return atomic.CompareAndSwapUint32((*uint32)(lock), 0, 1)
+}
+
+func (lock *atomicLock) unlock() {
+	atomic.StoreUint32((*uint32)(lock), 0)
+}
