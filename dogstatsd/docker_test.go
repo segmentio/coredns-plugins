@@ -275,6 +275,9 @@ func TestDockerClient(t *testing.T) {
 			NetworkSettings: dockerNetworkSettings{
 				Networks: map[string]dockerNetwork{
 					"coredns_vpc": {
+						IPAMConfig: dockerIPAMConfig{
+							IPv4Address: "10.5.0.4",
+						},
 						IPAddress: "10.5.0.4",
 					},
 				},
@@ -286,6 +289,9 @@ func TestDockerClient(t *testing.T) {
 			NetworkSettings: dockerNetworkSettings{
 				Networks: map[string]dockerNetwork{
 					"coredns_vpc": {
+						IPAMConfig: dockerIPAMConfig{
+							IPv4Address: "10.5.0.3",
+						},
 						IPAddress: "10.5.0.3",
 					},
 				},

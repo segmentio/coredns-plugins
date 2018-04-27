@@ -1,12 +1,10 @@
 package consul
 
 import (
-	"context"
 	"encoding/json"
 	"log"
 	"net"
 	"net/http"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +12,7 @@ import (
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/request"
 	"github.com/miekg/dns"
+	"golang.org/x/net/context"
 )
 
 // Consul is the implementation of the "consul" CoreDNS plugin.
@@ -32,9 +31,6 @@ type Consul struct {
 	// Maximum age of cached service entries.
 	TTL time.Duration
 
-	// Maximum number of inflight requests per target.
-	MaxRequests int
-
 	// Configuration of the cache prefetcher.
 	PrefetchAmount     int
 	PrefetchPercentage int
@@ -51,7 +47,6 @@ type Consul struct {
 const (
 	defaultAddr               = "http://localhost:8500"
 	defaultTTL                = 1 * time.Minute
-	defaultMaxRequests        = 8192
 	defaultPrefetchAmount     = 2
 	defaultPrefetchPercentage = 10
 	defaultPrefetchDuration   = 1 * time.Minute
@@ -62,7 +57,6 @@ func New() *Consul {
 	return &Consul{
 		Addr:               defaultAddr,
 		TTL:                defaultTTL,
-		MaxRequests:        defaultMaxRequests,
 		PrefetchAmount:     defaultPrefetchAmount,
 		PrefetchPercentage: defaultPrefetchPercentage,
 		PrefetchDuration:   defaultPrefetchDuration,
@@ -140,43 +134,30 @@ func (c *Consul) serveDNS(ctx context.Context, state request.Request) (rcode int
 		return
 	}
 
-	res := make(chan serviceResponse, 1)
-	req := serviceRequest{key: key, res: res}
+	var srv service
+	var ttl time.Duration
 
-	select {
-	case cache.reqs <- req:
-	case <-ctx.Done():
-		rcode, err = dns.RcodeServerFailure, ctx.Err()
+	if srv, ttl, err = cache.lookup(ctx, key, time.Now()); err != nil {
+		rcode = dns.RcodeServerFailure
 		return
 	}
 
-	var found serviceResponse
-	select {
-	case found = <-res:
-	case <-ctx.Done():
-		rcode, err = dns.RcodeServerFailure, ctx.Err()
-		return
-	}
-	if found.err != nil {
-		rcode, err = dns.RcodeServerFailure, found.err
-		return
-	}
-	if found.srv.addr == nil {
+	if srv.addr == nil {
 		rcode = dns.RcodeNameError
 		return
 	}
 
 	switch qtype {
 	case dns.TypeA:
-		answer = found.A(qname)
+		answer = srv.A(qname, ttl)
 	case dns.TypeAAAA:
-		answer = found.AAAA(qname)
+		answer = srv.AAAA(qname, ttl)
 	case dns.TypeANY:
-		answer = found.ANY(qname)
+		answer = srv.ANY(qname, ttl)
 	case dns.TypeSRV:
-		srv := found.SRV(qname)
-		answer = srv
-		extra = found.ANY(srv.Target)
+		rr := srv.SRV(qname, ttl)
+		answer = rr
+		extra = srv.ANY(rr.Target, ttl)
 	}
 	return
 }
@@ -205,8 +186,8 @@ func (c *Consul) grabCache(ctx context.Context) (*cache, consulAgent, error) {
 }
 
 func (c *Consul) init(ctx context.Context) (*cache, consulAgent, error) {
-	log.Printf("[INFO] consul %s { ttl %s; maxreq %d; prefetch %d %s %d%% }",
-		c.Addr, c.TTL, c.MaxRequests, c.PrefetchAmount, c.PrefetchDuration, c.PrefetchPercentage)
+	log.Printf("[INFO] consul %s { ttl %s; prefetch %d %s %d%% }",
+		c.Addr, c.TTL, c.PrefetchAmount, c.PrefetchDuration, c.PrefetchPercentage)
 
 	var transport http.RoundTripper
 	if transport = c.Transport; transport == nil {
@@ -228,21 +209,15 @@ func (c *Consul) init(ctx context.Context) (*cache, consulAgent, error) {
 		return nil, consulAgent{}, err
 	}
 
-	reqs := make(chan serviceRequest, c.MaxRequests)
-
 	cache := &cache{
-		reqs:               reqs,
 		addr:               c.Addr,
 		ttl:                c.TTL,
-		maxRequests:        c.MaxRequests,
 		prefetchAmount:     c.PrefetchAmount,
 		prefetchPercentage: c.PrefetchPercentage,
 		prefetchDuration:   c.PrefetchDuration,
 		transport:          transport,
 	}
 
-	go cache.serve(reqs)
-	runtime.SetFinalizer(c, func(c *Consul) { c.cache.close() })
 	return cache, agent, nil
 }
 
