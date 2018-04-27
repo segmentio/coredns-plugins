@@ -86,6 +86,10 @@ const (
 	defaultFlushInterval = 1 * time.Minute
 )
 
+func init() {
+	log.SetFlags(0)
+}
+
 // New returns a new instance of a dogstatsd plugin.
 func New() *Dogstatsd {
 	return &Dogstatsd{
@@ -188,7 +192,6 @@ func (d *Dogstatsd) refreshDockerCache() {
 			}
 			if len(ipAddress) != 0 {
 				cache[ipAddress] = append(cache[ipAddress], imageName)
-				log.Printf("[INFO] update docker cache: %s->%s", imageName, ipAddress)
 			}
 		}
 	}
@@ -203,8 +206,6 @@ func (d *Dogstatsd) reportMetrics(state state) {
 		log.Printf("[ERROR] collecting metrics: %s", err)
 		return
 	}
-
-	log.Printf("[INFO] flushing %d metrics to %s", len(metrics), d.Addr)
 
 	if err := d.flushMetrics(metrics); err != nil {
 		log.Printf("[ERROR] flushing metrics to the dogstatsd agent at %s: %s", d.Addr, err)
