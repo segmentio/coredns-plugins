@@ -31,7 +31,7 @@ type cache struct {
 }
 
 func (c *cache) prefetchDeadlineOf(e *entry) time.Time {
-	d := float64(c.prefetchDuration) * (float64(c.prefetchPercentage) / 1000)
+	d := float64(c.ttl) * (float64(c.prefetchPercentage) / 1000)
 	return e.exp.Add(-time.Duration(d))
 }
 
@@ -73,6 +73,7 @@ func (c *cache) lookup(ctx context.Context, k key, now time.Time) (srv service, 
 					exp:   now.Add(c.ttl),
 					ready: e.ready, // already closed
 					index: 1,       // can't be zero to avoid refetching on next lookup
+					once:  1,       // can't be zero to avoid closing the channel twice
 				})
 				m.cachePrefetchesInc()
 			}
