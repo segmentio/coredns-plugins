@@ -35,6 +35,10 @@ func (c *cache) prefetchDeadlineOf(e *entry) time.Time {
 	return e.exp.Add(-time.Duration(d))
 }
 
+func (c *cache) expirationTimeFrom(now time.Time) time.Time {
+	return now.Add(c.ttl + time.Duration(rand.Int63n(int64(c.ttl/2))))
+}
+
 func (c *cache) lookup(ctx context.Context, k key, now time.Time) (srv service, ttl time.Duration, err error) {
 	hit := true
 	m := k.metrics()
@@ -70,7 +74,7 @@ func (c *cache) lookup(ctx context.Context, k key, now time.Time) (srv service, 
 			} else if err == nil {
 				c.update(k, &entry{
 					srv:   srv,
-					exp:   now.Add(c.ttl),
+					exp:   c.expirationTimeFrom(now),
 					ready: e.ready, // already closed
 					index: 1,       // can't be zero to avoid refetching on next lookup
 					once:  1,       // can't be zero to avoid closing the channel twice
@@ -132,7 +136,7 @@ func (c *cache) grab(k key, now time.Time) (e *entry) {
 			}
 
 			e = &entry{
-				exp:   now.Add(c.ttl),
+				exp:   c.expirationTimeFrom(now),
 				ready: make(chan struct{}),
 			}
 
@@ -312,7 +316,7 @@ func (s service) header(name string, rrtype uint16, ttl time.Duration) dns.RR_He
 		Name:   name,
 		Rrtype: rrtype,
 		Class:  dns.ClassINET,
-		Ttl:    uint32(ttl.Round(time.Second)),
+		Ttl:    1 + uint32(ttl.Truncate(time.Second)/time.Second),
 	}
 }
 
