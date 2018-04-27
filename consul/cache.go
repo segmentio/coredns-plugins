@@ -91,11 +91,13 @@ func (c *cache) lookup(ctx context.Context, k key, now time.Time) (srv service, 
 		}
 	}
 
-	select {
-	case <-e.ready:
-	case <-ctx.Done():
-		err = ctx.Err()
-		return
+	if !e.isReady() {
+		select {
+		case <-e.ready:
+		case <-ctx.Done():
+			err = ctx.Err()
+			return
+		}
 	}
 
 	if n := len(e.srv); n != 0 {
