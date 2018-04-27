@@ -36,6 +36,8 @@ func (c *cache) prefetchDeadlineOf(e *entry) time.Time {
 }
 
 func (c *cache) lookup(ctx context.Context, k key, now time.Time) (srv service, ttl time.Duration, err error) {
+	hit := true
+	m := k.metrics()
 	e := c.grab(k, now)
 	i := e.index.incr() - 1
 
@@ -45,13 +47,26 @@ func (c *cache) lookup(ctx context.Context, k key, now time.Time) (srv service, 
 	// all very popular.
 	if i == 0 || (i >= uint32(c.prefetchAmount)) && now.After(c.prefetchDeadlineOf(e)) {
 		if e.lock.tryLock() {
+			t0 := time.Now()
 			srv, err := c.load(k)
+			t1 := time.Now()
 			e.lock.unlock()
 
 			if e.once.tryLock() {
 				e.srv = srv
 				e.err = err
 				close(e.ready)
+
+				if err == nil {
+					m.cacheSizeAddSuccess(1)
+				} else {
+					m.cacheSizeAddDenial(1)
+				}
+
+				hit = false
+				m.cacheMissesInc()
+				m.cacheServicesAdd(len(srv))
+
 			} else if err == nil {
 				c.update(k, &entry{
 					srv:   srv,
@@ -59,7 +74,11 @@ func (c *cache) lookup(ctx context.Context, k key, now time.Time) (srv service, 
 					ready: e.ready, // already closed
 					index: 1,       // can't be zero to avoid refetching on next lookup
 				})
+				m.cachePrefetchesInc()
 			}
+
+			m.cacheFetchSizesObserve(len(srv))
+			m.cacheFetchDurationsObserve(t1.Sub(t0))
 		}
 	}
 
@@ -84,6 +103,15 @@ func (c *cache) lookup(ctx context.Context, k key, now time.Time) (srv service, 
 
 	ttl = e.exp.Sub(now)
 	err = e.err
+
+	if hit {
+		if err == nil {
+			m.cacheHitsIncSuccess()
+		} else {
+			m.cacheHitsIncDenial()
+		}
+	}
+
 	return
 }
 
@@ -188,14 +216,27 @@ func (c *cache) cleanup(now time.Time) {
 	for k, e := range c.entries {
 		c.mutex.RUnlock()
 
-		if now.After(e.exp) {
+		if now.After(e.exp) && e.isReady() {
+			removed := false
+
 			c.mutex.Lock()
 			// In case the entries map was modified concurrently, we make
 			// sure that the e we've seen is still the one in the cache.
 			if c.entries[k] == e {
 				delete(c.entries, k)
+				removed = true
 			}
 			c.mutex.Unlock()
+
+			if removed {
+				m := k.metrics()
+				if e.err == nil {
+					m.cacheSizeAddDenial(-1)
+				} else {
+					m.cacheSizeAddSuccess(-1)
+				}
+				m.cacheServicesAdd(-len(e.srv))
+			}
 		}
 
 		c.mutex.RLock()
@@ -311,6 +352,15 @@ type entry struct {
 	index atomicIndex
 	lock  atomicLock
 	once  atomicLock
+}
+
+func (e *entry) isReady() bool {
+	select {
+	case <-e.ready:
+		return true
+	default:
+		return false
+	}
 }
 
 // https://www.consul.io/api/health.html#list-nodes-for-service
