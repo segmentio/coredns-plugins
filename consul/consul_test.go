@@ -229,7 +229,11 @@ func TestConsul(t *testing.T) {
 }
 
 func consulServer(serverDC string, serverServices []consulServerService) *httptest.Server {
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return httptest.NewServer(consulHandler(serverDC, serverServices))
+}
+
+func consulHandler(serverDC string, serverServices []consulServerService) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		const (
 			v1AgentSelf     = "/v1/agent/self"
 			v1HealthService = "/v1/health/service/"
@@ -276,7 +280,7 @@ func consulServer(serverDC string, serverServices []consulServerService) *httpte
 			w.WriteHeader(http.StatusNotFound)
 		}
 
-	}))
+	})
 }
 
 type consulServerService struct {
