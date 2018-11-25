@@ -156,7 +156,7 @@ func (c *cache) update(k key, e *entry) {
 }
 
 func (c *cache) load(k key) ([]service, error) {
-	u := c.addr + "/v1/health/service/" + url.QueryEscape(k.name) + "?passing"
+	u := c.addr + "/v1/health/service/" + url.QueryEscape(k.name) + "?passing&stale&cached"
 	if len(k.tag) != 0 {
 		u += "&tag=" + url.QueryEscape(k.tag)
 	}
