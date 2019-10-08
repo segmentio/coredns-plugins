@@ -90,7 +90,7 @@ func (c *Consul) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 	}
 
 	state.SizeAndDo(a)
-	a, _ = state.Scrub(a)
+	a = state.Scrub(a)
 	w.WriteMsg(a)
 	return rcode, err
 }
