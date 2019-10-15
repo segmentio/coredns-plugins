@@ -11,12 +11,8 @@ import (
 	"github.com/caddyserver/caddy"
 )
 
-func init() {
-	caddy.RegisterPlugin("consul", caddy.Plugin{
-		ServerType: "dns",
-		Action:     setupConsul,
-	})
-}
+
+func init() { plugin.Register("consul", setupConsul) }
 
 // setupConsulPlugin configures the consul plugin, the format is:
 //
