@@ -12,12 +12,7 @@ import (
 	"github.com/caddyserver/caddy"
 )
 
-func init() {
-	caddy.RegisterPlugin("dogstatsd", caddy.Plugin{
-		ServerType: "dns",
-		Action:     setup,
-	})
-}
+func init() { plugin.Register("dogstatsd", setup) }
 
 func setup(c *caddy.Controller) error {
 	d, err := dogstatsdParse(c)
