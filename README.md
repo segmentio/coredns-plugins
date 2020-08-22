@@ -4,7 +4,7 @@ This repository is home for custom [coredns](https://github.com/coredns/coredns)
 plugins that we use at Segment. We make them available to the public in the hope
 that they will be useful to someone.
 
-Envoy!
+Enjoy!
 
 ## Plugins
 
